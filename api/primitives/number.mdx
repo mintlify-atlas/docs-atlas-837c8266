@@ -1,0 +1,337 @@
+---
+title: z.number()
+description: Number schema type with numeric validations
+---
+
+## Basic Usage
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.number();
+schema.parse(42); // 42
+schema.parse(3.14); // 3.14
+schema.parse("42"); // throws ZodError
+```
+
+## Type Signature
+
+```typescript
+function number(params?: string | $ZodNumberParams): ZodNumber
+```
+
+<ParamField path="params" type="string | $ZodNumberParams" optional>
+  Optional error message (string) or configuration object
+</ParamField>
+
+## Important: NaN and Infinity
+
+In Zod v4, `z.number()` does NOT accept `NaN` or `Infinity` by default:
+
+```typescript
+const schema = z.number();
+schema.parse(Number.NaN); // throws
+schema.parse(Number.POSITIVE_INFINITY); // throws
+schema.parse(Number.NEGATIVE_INFINITY); // throws
+```
+
+## Comparison Methods
+
+### `.gt()`
+
+Greater than (exclusive).
+
+```typescript
+const schema = z.number().gt(5);
+schema.parse(6); // 6
+schema.parse(5); // throws
+```
+
+<ParamField path="value" type="number" required>
+  Exclusive minimum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message or params object
+</ParamField>
+
+### `.gte()` / `.min()`
+
+Greater than or equal (inclusive). `.min()` is an alias for `.gte()`.
+
+```typescript
+const schema = z.number().gte(5);
+schema.parse(5); // 5
+schema.parse(6); // 6
+schema.parse(4); // throws
+
+// Equivalent
+const schema2 = z.number().min(5);
+```
+
+<ParamField path="value" type="number" required>
+  Inclusive minimum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.lt()`
+
+Less than (exclusive).
+
+```typescript
+const schema = z.number().lt(5);
+schema.parse(4); // 4
+schema.parse(5); // throws
+```
+
+<ParamField path="value" type="number" required>
+  Exclusive maximum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.lte()` / `.max()`
+
+Less than or equal (inclusive). `.max()` is an alias for `.lte()`.
+
+```typescript
+const schema = z.number().lte(5);
+schema.parse(5); // 5
+schema.parse(4); // 4
+schema.parse(6); // throws
+
+// Equivalent
+const schema2 = z.number().max(5);
+```
+
+<ParamField path="value" type="number" required>
+  Inclusive maximum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+## Sign Validations
+
+### `.positive()`
+
+Requires number to be greater than zero.
+
+```typescript
+const schema = z.number().positive();
+schema.parse(1); // 1
+schema.parse(0); // throws
+schema.parse(-1); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.negative()`
+
+Requires number to be less than zero.
+
+```typescript
+const schema = z.number().negative();
+schema.parse(-1); // -1
+schema.parse(0); // throws
+schema.parse(1); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.nonnegative()`
+
+Requires number to be greater than or equal to zero.
+
+```typescript
+const schema = z.number().nonnegative();
+schema.parse(0); // 0
+schema.parse(1); // 1
+schema.parse(-1); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.nonpositive()`
+
+Requires number to be less than or equal to zero.
+
+```typescript
+const schema = z.number().nonpositive();
+schema.parse(0); // 0
+schema.parse(-1); // -1
+schema.parse(1); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+## Format Validations
+
+### `.int()` (Legacy)
+
+Requires an integer value. Accepts only safe integers (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
+
+```typescript
+const schema = z.number().int();
+schema.parse(42); // 42
+schema.parse(3.14); // throws
+```
+
+<Note>
+Consider using `z.int()` instead for a cleaner API.
+</Note>
+
+<ParamField path="params" type="string | $ZodCheckNumberFormatParams" optional>
+  Custom error message
+</ParamField>
+
+### `.safe()` (Deprecated)
+
+Identical to `.int()`. Only accepts safe integers.
+
+```typescript
+const schema = z.number().safe();
+schema.parse(Number.MAX_SAFE_INTEGER); // valid
+schema.parse(Number.MAX_SAFE_INTEGER + 1); // throws
+```
+
+### `.finite()` (Deprecated)
+
+In v4, this is a no-op since `z.number()` doesn't accept infinite values by default.
+
+```typescript
+const schema = z.number().finite();
+// This is the same as z.number()
+```
+
+## Multiple Of
+
+### `.multipleOf()` / `.step()`
+
+Requires number to be a multiple of a given value. `.step()` is an alias.
+
+```typescript
+const schema = z.number().multipleOf(5);
+schema.parse(15); // 15
+schema.parse(-15); // -15
+schema.parse(7.5); // throws
+
+// Precision example
+const precise = z.number().multipleOf(0.01);
+precise.parse(1.23); // 1.23
+precise.parse(1.234); // throws
+```
+
+<ParamField path="value" type="number" required>
+  The divisor (can be positive or negative)
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckMultipleOfParams" optional>
+  Custom error message
+</ParamField>
+
+## Properties
+
+### `.minValue`
+
+Returns the minimum value constraint, or `null` if not set.
+
+```typescript
+z.number().minValue; // null
+z.number().min(5).minValue; // 5
+z.number().gte(5).minValue; // 5
+z.number().gt(5).minValue; // 5
+z.number().positive().minValue; // 0
+z.number().nonnegative().minValue; // 0
+```
+
+### `.maxValue`
+
+Returns the maximum value constraint, or `null` if not set.
+
+```typescript
+z.number().maxValue; // null
+z.number().max(5).maxValue; // 5
+z.number().lte(5).maxValue; // 5
+z.number().lt(5).maxValue; // 5
+z.number().negative().maxValue; // 0
+z.number().nonpositive().maxValue; // 0
+```
+
+### `.isInt`
+
+Returns `true` if the schema requires an integer.
+
+```typescript
+z.number().isInt; // false
+z.number().int().isInt; // true
+z.number().safe().isInt; // true
+z.number().multipleOf(5).isInt; // true
+```
+
+### `.isFinite`
+
+Always returns `true` in Zod v4 (numbers don't accept infinite values).
+
+```typescript
+z.number().isFinite; // true
+```
+
+### `.format`
+
+Returns the format string if set, or `null`.
+
+```typescript
+z.number().format; // null
+z.int().format; // "int"
+z.int32().format; // "int32"
+```
+
+## Specialized Number Formats
+
+Use these standalone constructors instead of methods on `z.number()`:
+
+- `z.int()` - Safe integer
+- `z.int32()` - 32-bit signed integer
+- `z.uint32()` - 32-bit unsigned integer
+- `z.float32()` - 32-bit float
+- `z.float64()` - 64-bit float (standard JavaScript number)
+
+```typescript
+import { z } from 'zod';
+
+const age = z.int().min(0).max(120);
+const temperature = z.float32();
+```
+
+## Chaining
+
+All methods return `this`, enabling chaining:
+
+```typescript
+const schema = z.number()
+  .min(0)
+  .max(100)
+  .int()
+  .positive();
+```
+
+## See Also
+
+- [z.int()](/api/numbers/int) - Integer type
+- [Number Formats](/api/numbers/formats) - Specialized numeric types
+- [z.bigint()](/api/primitives/bigint) - For integers outside safe range

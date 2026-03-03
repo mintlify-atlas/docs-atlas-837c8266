@@ -1,0 +1,352 @@
+---
+title: JSON Schema Conversion
+description: Converting between Zod schemas and JSON Schema with toJSONSchema() and fromJSONSchema()
+---
+
+## Overview
+
+Zod provides bidirectional conversion between Zod schemas and JSON Schema, enabling interoperability with tools and systems that use JSON Schema.
+
+## Converting to JSON Schema
+
+### Basic Conversion
+
+Use `z.toJSONSchema()` to convert Zod schemas to JSON Schema:
+
+```typescript
+import * as z from 'zod';
+
+const schema = z.string();
+const jsonSchema = z.toJSONSchema(schema);
+
+console.log(jsonSchema);
+// {
+//   "$schema": "https://json-schema.org/draft/2020-12/schema",
+//   "type": "string"
+// }
+```
+
+### Primitive Types
+
+```typescript
+// String
+z.toJSONSchema(z.string());
+// { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "string" }
+
+// Number
+z.toJSONSchema(z.number());
+// { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "number" }
+
+// Boolean
+z.toJSONSchema(z.boolean());
+// { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "boolean" }
+
+// Null
+z.toJSONSchema(z.null());
+// { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "null" }
+```
+
+### Special Types
+
+```typescript
+// Any (no type constraint)
+z.toJSONSchema(z.any());
+// { "$schema": "https://json-schema.org/draft/2020-12/schema" }
+
+// Unknown (no type constraint)
+z.toJSONSchema(z.unknown());
+// { "$schema": "https://json-schema.org/draft/2020-12/schema" }
+
+// Never (matches nothing)
+z.toJSONSchema(z.never());
+// { "$schema": "https://json-schema.org/draft/2020-12/schema", "not": {} }
+
+// Undefined (unrepresentable in JSON Schema)
+z.toJSONSchema(z.undefined(), { unrepresentable: "any" });
+// { "$schema": "https://json-schema.org/draft/2020-12/schema" }
+```
+
+### String Formats
+
+```typescript
+// Email
+z.toJSONSchema(z.email());
+// {
+//   "$schema": "https://json-schema.org/draft/2020-12/schema",
+//   "format": "email",
+//   "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+//   "type": "string"
+// }
+
+// ISO DateTime
+z.toJSONSchema(z.iso.datetime());
+// {
+//   "$schema": "https://json-schema.org/draft/2020-12/schema",
+//   "format": "date-time",
+//   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+//   "type": "string"
+// }
+
+// ISO Date
+z.toJSONSchema(z.iso.date());
+// {
+//   "$schema": "https://json-schema.org/draft/2020-12/schema",
+//   "format": "date",
+//   "pattern": "^(?:(?:\\d\\d[2468][048]|...",
+//   "type": "string"
+// }
+```
+
+## JSON Schema Versions
+
+JSON Schema conversion defaults to Draft 2020-12, but you can target different versions:
+
+```typescript
+const schema = z.string();
+
+// Default: Draft 2020-12
+z.toJSONSchema(schema);
+// { "$schema": "https://json-schema.org/draft/2020-12/schema", ... }
+
+// Target specific version
+z.toJSONSchema(schema, { target: "draft-7" });
+z.toJSONSchema(schema, { target: "draft-4" });
+z.toJSONSchema(schema, { target: "openapi-3.0" });
+```
+
+## OpenAPI 3.0 Compatibility
+
+Validate that generated JSON Schema is compatible with OpenAPI 3.0:
+
+```typescript
+import { Validator } from '@seriousme/openapi-schema-validator';
+
+const openAPI30Validator = new Validator();
+
+const validateOpenAPI30Schema = async (zodJSONSchema: Record<string, unknown>): Promise<boolean> => {
+  const res = await openAPI30Validator.validate({
+    openapi: "3.0.0",
+    info: {
+      title: "SampleApi",
+      description: "Sample backend service",
+      version: "1.0.0"
+    },
+    components: { schemas: { test: zodJSONSchema } },
+    paths: {}
+  });
+  
+  return res.valid;
+};
+
+const schema = z.object({
+  name: z.string(),
+  age: z.number()
+});
+
+const jsonSchema = z.toJSONSchema(schema);
+await validateOpenAPI30Schema(jsonSchema); // true
+```
+
+## Converting from JSON Schema
+
+### Basic Conversion
+
+Use `z.fromJSONSchema()` to convert JSON Schema to Zod schemas:
+
+```typescript
+import * as z from 'zod';
+import type { JSONSchema } from 'zod/core';
+
+const jsonSchema: JSONSchema = {
+  type: "string",
+  minLength: 5,
+  maxLength: 10
+};
+
+const zodSchema = z.fromJSONSchema(jsonSchema);
+
+// Use the schema
+const result = zodSchema.safeParse("hello");
+```
+
+### Object Schemas
+
+```typescript
+const jsonSchema: JSONSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    age: { type: "number" },
+    email: { type: "string", format: "email" }
+  },
+  required: ["name", "age"]
+};
+
+const zodSchema = z.fromJSONSchema(jsonSchema);
+// Equivalent to:
+// z.object({
+//   name: z.string(),
+//   age: z.number(),
+//   email: z.string().email().optional()
+// })
+```
+
+### Array Schemas
+
+```typescript
+const jsonSchema: JSONSchema = {
+  type: "array",
+  items: { type: "string" },
+  minItems: 1,
+  maxItems: 10
+};
+
+const zodSchema = z.fromJSONSchema(jsonSchema);
+// Equivalent to: z.array(z.string()).min(1).max(10)
+```
+
+### Schema References
+
+```typescript
+const jsonSchema: JSONSchema = {
+  $defs: {
+    User: {
+      type: "object",
+      properties: {
+        id: { type: "number" },
+        name: { type: "string" }
+      },
+      required: ["id", "name"]
+    }
+  },
+  type: "array",
+  items: { $ref: "#/$defs/User" }
+};
+
+const zodSchema = z.fromJSONSchema(jsonSchema);
+// Handles circular references automatically
+```
+
+## Conversion Options
+
+### Target Version
+
+Specify the JSON Schema version being converted from:
+
+```typescript
+z.fromJSONSchema(jsonSchema, {
+  defaultTarget: "draft-7"
+});
+
+z.fromJSONSchema(jsonSchema, {
+  defaultTarget: "openapi-3.0"
+});
+```
+
+### Custom Registry
+
+Use a custom registry for schema resolution:
+
+```typescript
+import { globalRegistry } from 'zod/core';
+
+const myRegistry = /* custom registry */;
+
+z.fromJSONSchema(jsonSchema, {
+  registry: myRegistry
+});
+```
+
+## Supported JSON Schema Features
+
+Zod's JSON Schema conversion supports:
+
+### Type Keywords
+- `type`: All JSON types (string, number, boolean, null, object, array, integer)
+- `enum`: Enumerated values
+- `const`: Constant values
+
+### Composition Keywords
+- `anyOf`: Union types
+- `oneOf`: Discriminated unions
+- `allOf`: Intersection types
+- `not`: Negation
+
+### Object Keywords
+- `properties`: Object properties
+- `required`: Required fields
+- `additionalProperties`: Extra properties
+- `patternProperties`: Pattern-based properties
+- `minProperties`, `maxProperties`: Property count constraints
+
+### Array Keywords
+- `items`: Array item schema
+- `prefixItems`: Tuple validation
+- `minItems`, `maxItems`: Length constraints
+- `uniqueItems`: Uniqueness constraint
+- `contains`: Contains validation
+
+### String Keywords
+- `minLength`, `maxLength`: Length constraints
+- `pattern`: Regex pattern
+- `format`: Format validation (email, url, uuid, etc.)
+
+### Number Keywords
+- `minimum`, `maximum`: Range constraints
+- `exclusiveMinimum`, `exclusiveMaximum`: Exclusive bounds
+- `multipleOf`: Multiple constraint
+
+### Metadata
+- `description`: Schema description
+- `default`: Default values
+- `$schema`, `$id`, `$comment`: Schema metadata
+
+## Unsupported Features
+
+Some JSON Schema features are not supported:
+
+- `unevaluatedItems`
+- `unevaluatedProperties`
+- `if`/`then`/`else` conditionals
+- `dependentSchemas`
+- `dependentRequired`
+
+<Warning>
+Attempting to convert JSON Schema with unsupported features will throw an error.
+</Warning>
+
+## Round-Trip Conversion
+
+You can convert back and forth between Zod and JSON Schema:
+
+```typescript
+const originalSchema = z.object({
+  name: z.string(),
+  age: z.number().min(0).max(120)
+});
+
+// Zod -> JSON Schema
+const jsonSchema = z.toJSONSchema(originalSchema);
+
+// JSON Schema -> Zod
+const reconstructedSchema = z.fromJSONSchema(jsonSchema);
+
+// Use reconstructed schema
+const result = reconstructedSchema.safeParse({
+  name: "John",
+  age: 30
+});
+```
+
+<Note>
+While round-trip conversion is possible, some Zod features (like custom refinements) cannot be represented in JSON Schema and will be lost in conversion.
+</Note>
+
+## Best Practices
+
+1. **Use standard JSON Schema features** - Stick to widely supported keywords for better compatibility
+2. **Validate OpenAPI compatibility** - If targeting OpenAPI, validate the generated schema
+3. **Handle unsupported features** - Catch errors when converting JSON Schema with unsupported features
+4. **Preserve metadata** - Use `description` and other metadata fields for documentation
+5. **Test round-trip conversion** - Verify that converting to/from JSON Schema preserves validation behavior
+6. **Use $defs for reusable schemas** - Define reusable schemas in `$defs` and reference them

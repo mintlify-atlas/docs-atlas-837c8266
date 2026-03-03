@@ -1,0 +1,194 @@
+---
+title: .default()
+description: Provide default values when input is undefined
+---
+
+## Basic Usage
+
+The `.default()` modifier provides a fallback value when the input is `undefined`.
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.string().default('hello');
+
+schema.parse('world');     // 'world'
+schema.parse(undefined);   // 'hello'
+schema.parse(null);        // throws error
+```
+
+<Note>
+`.default()` only applies to `undefined` values, not `null` or other invalid inputs.
+</Note>
+
+## Type Inference
+
+The `.default()` modifier changes the input type to include `undefined`, but the output type excludes it:
+
+```typescript
+const schema = z.string().default('hello');
+
+type Input = z.input<typeof schema>;   // string | undefined
+type Output = z.output<typeof schema>; // string (no undefined)
+```
+
+This is because the default value ensures the output is always defined.
+
+## Dynamic Defaults
+
+You can provide a function that generates the default value:
+
+```typescript
+const schema = z.object({
+  id: z.string().default(() => crypto.randomUUID()),
+  createdAt: z.date().default(() => new Date()),
+});
+
+const result1 = schema.parse({});
+const result2 = schema.parse({});
+// result1.id !== result2.id (different UUIDs)
+```
+
+<Warning>
+Dynamic defaults are called each time the default is needed. For objects and arrays, this creates a new instance each time, preventing shared references.
+</Warning>
+
+## In Object Schemas
+
+Fields with `.default()` become optional in the input type:
+
+```typescript
+const UserSchema = z.object({
+  name: z.string(),
+  role: z.string().default('user'),
+  isActive: z.boolean().default(true),
+});
+
+type UserInput = z.input<typeof UserSchema>;
+// { name: string; role?: string | undefined; isActive?: boolean | undefined }
+
+type User = z.output<typeof UserSchema>;
+// { name: string; role: string; isActive: boolean }
+
+UserSchema.parse({ name: 'John' });
+// { name: 'John', role: 'user', isActive: true }
+
+UserSchema.parse({ name: 'Jane', role: 'admin' });
+// { name: 'Jane', role: 'admin', isActive: true }
+```
+
+## Shallow Cloning
+
+Default values are shallow cloned to prevent reference sharing:
+
+```typescript
+const schema = z.object({
+  tags: z.array(z.string()).default(['default']),
+});
+
+const result1 = schema.parse({});
+const result2 = schema.parse({});
+
+result1.tags.push('new');
+console.log(result2.tags); // ['default'] - not affected
+```
+
+## Chaining with Optional
+
+```typescript
+// Default on optional
+const schema1 = z.string().optional().default('hello');
+
+type Input1 = z.input<typeof schema1>;   // string | undefined
+type Output1 = z.output<typeof schema1>; // string
+
+schema1.parse(undefined); // 'hello'
+
+// Optional on default
+const schema2 = z.string().default('hello').optional();
+
+type Input2 = z.input<typeof schema2>;   // string | undefined
+type Output2 = z.output<typeof schema2>; // string | undefined
+
+schema2.parse(undefined); // 'hello' (default applied)
+```
+
+## Chaining with Transform
+
+```typescript
+const schema = z.string()
+  .transform(s => s.toUpperCase())
+  .default('hello');
+
+type Input = z.input<typeof schema>;   // string | undefined
+type Output = z.output<typeof schema>; // string
+
+schema.parse('world');     // 'WORLD'
+schema.parse(undefined);   // 'hello' (not transformed)
+```
+
+<Note>
+When chaining `.default()` after `.transform()`, the default value is applied at the output stage, so it bypasses the transformation.
+</Note>
+
+## Nested Defaults
+
+```typescript
+const schema = z.object({
+  inner: z.string().default('inner-default'),
+}).default({
+  inner: 'outer-default',
+});
+
+type Input = z.input<typeof schema>;
+// { inner?: string | undefined } | undefined
+
+type Output = z.output<typeof schema>;
+// { inner: string }
+
+schema.parse(undefined);          // { inner: 'outer-default' }
+schema.parse({});                 // { inner: 'inner-default' }
+schema.parse({ inner: undefined }); // { inner: 'inner-default' }
+schema.parse({ inner: 'custom' });  // { inner: 'custom' }
+```
+
+## Direction-Aware Behavior
+
+Defaults only apply during parsing (forward direction), not during encoding:
+
+```typescript
+const schema = z.string().default('hello');
+
+// Parsing (forward)
+schema.parse(undefined); // 'hello'
+
+// Encoding (reverse)
+z.encode(schema, undefined); // throws error - no default applied
+```
+
+## Unwrapping
+
+You can remove the default wrapper:
+
+```typescript
+const withDefault = z.string().default('hello');
+const withoutDefault = withDefault.unwrap(); // ZodString
+
+// Legacy method (deprecated)
+const withoutDefault2 = withDefault.removeDefault(); // same as unwrap()
+```
+
+## Use Cases
+
+- **Configuration objects**: Provide sensible defaults for optional config
+- **API responses**: Fill in missing fields with default values
+- **Form data**: Supply default values for unpopulated fields
+- **Database records**: Set default values for optional columns
+
+## Comparison with .catch()
+
+| Feature | `.default()` | `.catch()` |
+|---------|-------------|------------|
+| Triggers on | `undefined` only | Any validation failure |
+| Use case | Optional inputs | Error recovery |
+| Output type | Removes `undefined` | Keeps original type |

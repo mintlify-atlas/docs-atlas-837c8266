@@ -1,0 +1,302 @@
+---
+title: Ecosystem
+description: Popular Zod ecosystem libraries, integrations, and community resources
+---
+
+The Zod ecosystem has grown tremendously, with a rich collection of libraries, integrations, and tools built on top of Zod.
+
+<Note>
+To avoid bloat and confusion, the Ecosystem section has been wiped clean with the release of Zod 4. If you've updated your library to work with Zod 4, please submit a PR to add it back in. For libraries that work with Zod 3, refer to [v3.zod.dev](https://v3.zod.dev/?id=ecosystem).
+</Note>
+
+If you've built a tool or library on top of Zod, let us know [on Twitter](https://x.com/colinhacks) or [start a Discussion](https://github.com/colinhacks/zod/discussions).
+
+## Learning resources
+
+Great tutorials and guides for learning Zod:
+
+- [Total TypeScript Zod Tutorial](https://www.totaltypescript.com/tutorials/zod) by [@mattpocockuk](https://x.com/mattpocockuk)
+- [Fixing TypeScript's Blindspot: Runtime Typechecking](https://www.youtube.com/watch?v=rY_XqfSHock) by [@jherr](https://x.com/jherr)
+- [Validate Environment Variables With Zod](https://catalins.tech/validate-environment-variables-with-zod/) by [@catalinmpit](https://x.com/catalinmpit)
+
+## API libraries
+
+Libraries for building type-safe APIs with Zod validation:
+
+<CardGroup cols={2}>
+  <Card
+    title="tRPC"
+    description="Build end-to-end typesafe APIs without GraphQL."
+    href="https://github.com/trpc/trpc"
+  />
+  <Card
+    title="GQLoom"
+    description="Weave GraphQL schema and resolvers using Zod."
+    href="https://gqloom.dev/"
+  />
+  <Card
+    title="oRPC"
+    description="Typesafe APIs Made Simple"
+    href="https://orpc.unnoq.com/"
+  />
+  <Card
+    title="Express Zod API"
+    description="Build Express-based API with I/O validation and middlewares, OpenAPI docs and type-safe client."
+    href="https://github.com/RobinTail/express-zod-api"
+  />
+  <Card
+    title="nestjs-zod"
+    description="Integrate nestjs and zod. Create nestjs DTOs using zod, serialize with zod, and generate OpenAPI documentation from zod schemas."
+    href="https://github.com/BenLorantfy/nestjs-zod"
+  />
+  <Card
+    title="Zod Sockets"
+    description="Socket.IO solution with I/O validation, an AsyncAPI generator, and a type-safe events map."
+    href="https://github.com/RobinTail/zod-sockets"
+  />
+  <Card
+    title="Zod JSON-RPC"
+    description="Type-safe JSON-RPC 2.0 client/server library using Zod."
+    href="https://github.com/danscan/zod-jsonrpc"
+  />
+  <Card
+    title="upfetch"
+    description="Advanced fetch client builder"
+    href="https://github.com/L-Blondy/up-fetch"
+  />
+</CardGroup>
+
+## Form integrations
+
+Libraries for form validation and handling with Zod:
+
+<CardGroup cols={2}>
+  <Card
+    title="regle"
+    description="Headless form validation library for Vue.js."
+    href="https://github.com/victorgarciaesgi/regle"
+  />
+  <Card
+    title="Conform"
+    description="A type-safe form validation library utilizing web fundamentals to progressively enhance HTML Forms with full support for server frameworks like Remix and Next.js."
+    href="https://conform.guide/api/zod/parseWithZod"
+  />
+  <Card
+    title="Superforms"
+    description="Making SvelteKit forms a pleasure to use!"
+    href="https://superforms.rocks"
+  />
+  <Card
+    title="zod-validation-error"
+    description="Generate user-friendly error messages from ZodError instances."
+    href="https://github.com/causaly/zod-validation-error"
+  />
+  <Card
+    title="svelte-jsonschema-form"
+    description="Svelte 5 library for creating forms based on JSON schema."
+    href="https://x0k.dev/svelte-jsonschema-form/validators/zod4/"
+  />
+  <Card
+    title="frrm"
+    description="Tiny 0.5kb Zod-based, HTML form abstraction that goes brr."
+    href="https://www.npmjs.com/package/frrm"
+  />
+  <Card
+    title="react-f3"
+    description="Components, hooks & utilities for creating and managing delightfully simple form experiences in React."
+    href="https://www.npmjs.com/package/react-f3"
+  />
+</CardGroup>
+
+## Zod to X converters
+
+Tools for converting Zod schemas to other formats:
+
+<CardGroup cols={2}>
+  <Card
+    title="zod-openapi"
+    description="Use Zod Schemas to create OpenAPI v3.x documentation"
+    href="https://github.com/samchungy/zod-openapi"
+  />
+  <Card
+    title="fastify-zod-openapi"
+    description="Fastify type provider, validation, serialization and @fastify/swagger support for Zod schemas"
+    href="https://github.com/samchungy/fastify-zod-openapi"
+  />
+  <Card
+    title="zod2md"
+    description="Generate Markdown docs from Zod schemas"
+    href="https://github.com/matejchalk/zod2md"
+  />
+  <Card
+    title="prisma-zod-generator"
+    description="Generate Zod schemas from Prisma schema with full ZodObject method support"
+    href="https://github.com/omar-dulaimi/prisma-zod-generator"
+  />
+  <Card
+    title="@traversable/zod"
+    description="Build your own 'Zod to x' library, or pick one of 25+ off-the-shelf transformers"
+    href="https://github.com/traversable/schema/tree/main/packages/zod"
+  />
+  <Card
+    title="zod-to-mongo-schema"
+    description="Convert Zod schemas to MongoDB-compatible JSON Schemas effortlessly"
+    href="https://github.com/udohjeremiah/zod-to-mongo-schema"
+  />
+  <Card
+    title="convex-helpers"
+    description="Use Zod to validate arguments and return values of Convex functions, and to create Convex database schemas"
+    href="https://github.com/get-convex/convex-helpers/blob/main/packages/convex-helpers/README.md#zod-validation"
+  />
+</CardGroup>
+
+## X to Zod converters
+
+Tools for generating Zod schemas from other formats:
+
+<CardGroup cols={2}>
+  <Card
+    title="orval"
+    description="Generate Zod schemas from OpenAPI schemas"
+    href="https://github.com/orval-labs/orval"
+  />
+  <Card
+    title="kubb"
+    description="The ultimate toolkit for working with APIs."
+    href="https://github.com/kubb-labs/kubb"
+  />
+  <Card
+    title="Hey API"
+    description="The OpenAPI to TypeScript codegen. Generate clients, SDKs, validators, and more."
+    href="https://heyapi.dev/openapi-ts/plugins/zod"
+  />
+  <Card
+    title="valype"
+    description="Typescript's type definition to runtime validator (including zod)."
+    href="https://github.com/yuzheng14/valype"
+  />
+  <Card
+    title="Prisma Zod Generator"
+    description="Generates Zod schemas with input/result/pure variants, minimal/full/custom, selective emit/filtering, single/multi-file output, @zod rules, relation depth guards."
+    href="https://github.com/omar-dulaimi/prisma-zod-generator"
+  />
+  <Card
+    title="DRZL"
+    description="Drizzle ORM toolkit that can generate Zod validators from schema(s), plus typed services and strongly typed routers (oRPC/tRPC/etc)."
+    href="https://github.com/use-drzl/drzl"
+  />
+  <Card
+    title="Hono Takibi"
+    description="Hono Takibi is a code generator from OpenAPI to @hono/zod-openapi"
+    href="https://github.com/nakita628/hono-takibi"
+  />
+</CardGroup>
+
+## Mocking and testing
+
+Libraries for generating mock data from Zod schemas:
+
+<CardGroup cols={2}>
+  <Card
+    title="zod-schema-faker"
+    description="Generate mock data from zod schemas. Powered by @faker-js/faker and randexp.js."
+    href="https://github.com/soc221b/zod-schema-faker"
+  />
+  <Card
+    title="zocker"
+    description="Generates valid, semantically meaningful data for your Zod schemas."
+    href="https://zocker.sigrist.dev"
+  />
+  <Card
+    title="@traversable/zod-test"
+    description="Random zod schema generator built for fuzz testing; includes generators for both valid and invalid data"
+    href="https://github.com/traversable/schema/tree/main/packages/zod-test"
+  />
+</CardGroup>
+
+## Utilities and tools
+
+Developer tools, linters, and utilities for Zod:
+
+<CardGroup cols={2}>
+  <Card
+    title="babel-plugin-zod-hoist"
+    description="Babel plugin that optimizes Zod performance by hoisting schema definitions to the top of the file, avoiding repeated initialization overhead."
+    href="https://github.com/gajus/babel-plugin-zod-hoist"
+  />
+  <Card
+    title="eslint-plugin-import-zod"
+    description="ESLint plugin to enforce namespace imports for Zod."
+    href="https://github.com/samchungy/eslint-plugin-import-zod"
+  />
+  <Card
+    title="zod-playground"
+    description="Interactive playground for testing and exploring Zod and Zod mini schemas in real-time."
+    href="https://github.com/marilari88/zod-playground"
+  />
+  <Card
+    title="eslint-plugin-zod-x"
+    description="ESLint plugin that adds custom linting rules to enforce best practices when using Zod"
+    href="https://github.com/marcalexiei/eslint-plugin-zod-x"
+  />
+  <Card
+    title="Zod Compare"
+    description="A utility library for recursively comparing Zod schemas."
+    href="https://github.com/lawvs/zod-compare"
+  />
+  <Card
+    title="zod-ir"
+    description="Comprehensive validation for Iranian data structures (National Code, Bank Cards, Sheba, Crypto, etc) with smart metadata extraction (Bank Names, Logos). Zero dependencies."
+    href="https://github.com/Reza-kh80/zod-ir"
+  />
+</CardGroup>
+
+## Powered by Zod
+
+Libraries and applications built with Zod at their core:
+
+<CardGroup cols={2}>
+  <Card
+    title="zod-config"
+    description="Load configurations across multiple sources with flexible adapters, ensuring type safety with Zod."
+    href="https://github.com/alexmarqs/zod-config"
+  />
+  <Card
+    title="Composable Functions"
+    description="Types and functions to make composition easy and safe."
+    href="https://github.com/seasonedcc/composable-functions"
+  />
+  <Card
+    title="zod-xlsx"
+    description="A xlsx based resource validator using Zod schemas for data imports and more"
+    href="https://github.com/sidwebworks/zod-xlsx"
+  />
+  <Card
+    title="bupkis"
+    description="Uncommonly extensible assertions for the beautiful people"
+    href="https://github.com/boneskull/bupkis"
+  />
+  <Card
+    title="Fn Sphere"
+    description="A Zod-first toolkit for building powerful, type-safe filter experiences across web apps."
+    href="https://github.com/lawvs/fn-sphere"
+  />
+  <Card
+    title="zodgres"
+    description="Postgres.js + Zod: Database collections with static type inference and automatic migrations"
+    href="https://github.com/endel/zodgres"
+  />
+</CardGroup>
+
+## Contributing to the ecosystem
+
+Want to add your library to this list? Here's how:
+
+1. Ensure your library supports Zod 4
+2. Submit a PR to the [Zod repository](https://github.com/colinhacks/zod)
+3. Include a clear description and link to documentation
+4. Add your library to the appropriate category
+
+<Callout>
+For the most up-to-date list of ecosystem libraries and their GitHub stars, visit the [official Zod documentation](https://zod.dev).
+</Callout>

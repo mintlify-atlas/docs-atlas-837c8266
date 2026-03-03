@@ -1,0 +1,430 @@
+---
+title: 'z.map()'
+description: 'Define Map schemas with key and value validation'
+---
+
+## Basic Usage
+
+Create a schema for JavaScript `Map` objects with validated keys and values.
+
+```typescript
+import { z } from 'zod';
+
+const StringToNumber = z.map(z.string(), z.number());
+
+const validMap = new Map([
+  ['alice', 100],
+  ['bob', 200],
+]);
+
+StringToNumber.parse(validMap); // ✓ Valid
+
+const invalidMap = new Map([
+  ['alice', 'invalid'],
+]);
+
+StringToNumber.parse(invalidMap); // ✗ Invalid - value must be number
+
+type StringToNumber = z.infer<typeof StringToNumber>;
+// Map<string, number>
+```
+
+## Signature
+
+```typescript
+function map<Key extends SomeType, Value extends SomeType>(
+  keyType: Key,
+  valueType: Value,
+  params?: string | ZodMapParams
+): ZodMap<Key, Value>
+```
+
+<ParamField path="keyType" type="ZodType" required>
+  Schema to validate all map keys.
+</ParamField>
+
+<ParamField path="valueType" type="ZodType" required>
+  Schema to validate all map values.
+</ParamField>
+
+<ParamField path="params" type="string | ZodMapParams">
+  Optional error message (string) or configuration object.
+</ParamField>
+
+## Properties
+
+<ParamField path="keyType" type="ZodType">
+  Access the key schema.
+  
+  ```typescript
+  const schema = z.map(z.string(), z.number());
+  schema.keyType; // ZodString
+  ```
+</ParamField>
+
+<ParamField path="valueType" type="ZodType">
+  Access the value schema.
+  
+  ```typescript
+  const schema = z.map(z.string(), z.number());
+  schema.valueType; // ZodNumber
+  ```
+</ParamField>
+
+## Methods
+
+### min()
+
+Set a minimum size for the map.
+
+```typescript
+const AtLeastThree = z.map(z.string(), z.number()).min(3);
+
+const valid = new Map([
+  ['a', 1],
+  ['b', 2],
+  ['c', 3],
+]);
+AtLeastThree.parse(valid); // ✓ Valid
+
+const invalid = new Map([['a', 1]]);
+AtLeastThree.parse(invalid); // ✗ Invalid - too few entries
+```
+
+**Signature:**
+
+```typescript
+min(minSize: number, params?: string | ZodCheckMinSizeParams): this
+```
+
+<ParamField path="minSize" type="number" required>
+  Minimum number of entries required.
+</ParamField>
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+  
+  ```typescript
+  z.map(z.string(), z.number()).min(3, 'Need at least 3 entries')
+  ```
+</ParamField>
+
+### max()
+
+Set a maximum size for the map.
+
+```typescript
+const AtMostFive = z.map(z.string(), z.boolean()).max(5);
+
+const valid = new Map([
+  ['a', true],
+  ['b', false],
+]);
+AtMostFive.parse(valid); // ✓ Valid
+
+const invalid = new Map([
+  ['a', true],
+  ['b', false],
+  ['c', true],
+  ['d', false],
+  ['e', true],
+  ['f', false],
+]);
+AtMostFive.parse(invalid); // ✗ Invalid - too many entries
+```
+
+**Signature:**
+
+```typescript
+max(maxSize: number, params?: string | ZodCheckMaxSizeParams): this
+```
+
+<ParamField path="maxSize" type="number" required>
+  Maximum number of entries allowed.
+</ParamField>
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+  
+  ```typescript
+  z.map(z.string(), z.boolean()).max(5, 'Cannot exceed 5 entries')
+  ```
+</ParamField>
+
+### size()
+
+Set an exact size for the map.
+
+```typescript
+const ExactlyThree = z.map(z.number(), z.string()).size(3);
+
+const valid = new Map([
+  [1, 'one'],
+  [2, 'two'],
+  [3, 'three'],
+]);
+ExactlyThree.parse(valid); // ✓ Valid
+
+const invalid = new Map([[1, 'one']]);
+ExactlyThree.parse(invalid); // ✗ Invalid - wrong size
+```
+
+**Signature:**
+
+```typescript
+size(size: number, params?: string | ZodCheckSizeEqualsParams): this
+```
+
+<ParamField path="size" type="number" required>
+  Exact number of entries required.
+</ParamField>
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+</ParamField>
+
+### nonempty()
+
+Require at least one entry (equivalent to `.min(1)`).
+
+```typescript
+const NonEmptyMap = z.map(z.string(), z.number()).nonempty();
+
+const valid = new Map([['key', 123]]);
+NonEmptyMap.parse(valid); // ✓ Valid
+
+const invalid = new Map();
+NonEmptyMap.parse(invalid); // ✗ Invalid - empty map
+```
+
+**Signature:**
+
+```typescript
+nonempty(params?: string | ZodCheckMinSizeParams): this
+```
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+</ParamField>
+
+## Complex Types
+
+### Object Values
+
+```typescript
+const UserMap = z.map(
+  z.string(),
+  z.object({
+    name: z.string(),
+    age: z.number(),
+    email: z.string().email(),
+  })
+);
+
+type UserMap = z.infer<typeof UserMap>;
+// Map<string, { name: string; age: number; email: string }>
+
+const users = new Map([
+  ['user1', { name: 'Alice', age: 30, email: 'alice@example.com' }],
+  ['user2', { name: 'Bob', age: 25, email: 'bob@example.com' }],
+]);
+
+UserMap.parse(users); // ✓ Valid
+```
+
+### Object Keys
+
+```typescript
+const Coordinate = z.object({ x: z.number(), y: z.number() });
+const LocationMap = z.map(Coordinate, z.string());
+
+type LocationMap = z.infer<typeof LocationMap>;
+// Map<{ x: number; y: number }, string>
+
+const locations = new Map([
+  [{ x: 0, y: 0 }, 'Origin'],
+  [{ x: 10, y: 20 }, 'Point A'],
+]);
+
+LocationMap.parse(locations); // ✓ Valid
+```
+
+<Note>
+When using object keys, remember that JavaScript uses reference equality. Two objects with the same shape are different keys.
+</Note>
+
+### Nested Maps
+
+```typescript
+const NestedMap = z.map(
+  z.string(),
+  z.map(z.number(), z.boolean())
+);
+
+type NestedMap = z.infer<typeof NestedMap>;
+// Map<string, Map<number, boolean>>
+
+const nested = new Map([
+  ['group1', new Map([[1, true], [2, false]])],
+  ['group2', new Map([[3, true], [4, true]])],
+]);
+
+NestedMap.parse(nested); // ✓ Valid
+```
+
+## Type Inference
+
+```typescript
+const schema = z.map(
+  z.string(),
+  z.object({ count: z.number() })
+);
+
+type Output = z.infer<typeof schema>;
+// Map<string, { count: number }>
+
+type Input = z.input<typeof schema>;
+// Same as output for maps without transformations
+```
+
+## Common Patterns
+
+### Cache Implementation
+
+```typescript
+const Cache = z.map(
+  z.string(), // key
+  z.object({
+    value: z.unknown(),
+    expiresAt: z.date(),
+  })
+).refine(
+  (map) => {
+    const now = new Date();
+    return Array.from(map.values()).every(v => v.expiresAt > now);
+  },
+  'Cache contains expired entries'
+);
+
+type Cache = z.infer<typeof Cache>;
+// Map<string, { value: unknown; expiresAt: Date }>
+```
+
+### Entity Store
+
+```typescript
+const Entity = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.date(),
+});
+
+const EntityStore = z.map(z.string(), Entity).min(1);
+
+type EntityStore = z.infer<typeof EntityStore>;
+// Map<string, { id: string; name: string; createdAt: Date }>
+
+const store = new Map();
+store.set('e1', { id: 'e1', name: 'First', createdAt: new Date() });
+store.set('e2', { id: 'e2', name: 'Second', createdAt: new Date() });
+
+EntityStore.parse(store); // ✓ Valid
+```
+
+### Adjacency List (Graph)
+
+```typescript
+const Graph = z.map(
+  z.string(), // node id
+  z.set(z.string()) // connected node ids
+);
+
+type Graph = z.infer<typeof Graph>;
+// Map<string, Set<string>>
+
+const graph = new Map([
+  ['A', new Set(['B', 'C'])],
+  ['B', new Set(['A', 'D'])],
+  ['C', new Set(['A', 'D'])],
+  ['D', new Set(['B', 'C'])],
+]);
+
+Graph.parse(graph); // ✓ Valid
+```
+
+## Refinements
+
+Add custom validation:
+
+```typescript
+const UniqueValues = z.map(z.string(), z.number())
+  .refine(
+    (map) => {
+      const values = Array.from(map.values());
+      return new Set(values).size === values.length;
+    },
+    'Map values must be unique'
+  );
+
+const valid = new Map([['a', 1], ['b', 2], ['c', 3]]);
+UniqueValues.parse(valid); // ✓ Valid
+
+const invalid = new Map([['a', 1], ['b', 1]]); // duplicate value
+UniqueValues.parse(invalid); // ✗ Invalid
+```
+
+## Map vs Record
+
+| Feature | Map | Record |
+|---------|-----|--------|
+| **Data Structure** | `Map` object | Plain object |
+| **Key Type** | Any type | String/Number/Symbol |
+| **Iteration** | Ordered | Unordered |
+| **Size** | `.size` property | Count keys |
+| **Performance** | Better for frequent additions/deletions | Better for static data |
+
+```typescript
+// Map - any key type, ordered
+const mapSchema = z.map(z.number(), z.string());
+type MapType = z.infer<typeof mapSchema>;
+// Map<number, string>
+
+// Record - string/number keys only
+const recordSchema = z.record(z.string(), z.string());
+type RecordType = z.infer<typeof recordSchema>;
+// Record<string, string>
+```
+
+## Transformations
+
+Transform map data:
+
+```typescript
+const MapToObject = z.map(z.string(), z.number())
+  .transform((map) => Object.fromEntries(map));
+
+const input = new Map([['a', 1], ['b', 2]]);
+const result = MapToObject.parse(input);
+// result: { a: 1, b: 2 }
+
+type Result = z.infer<typeof MapToObject>;
+// { [key: string]: number }
+```
+
+```typescript
+const ObjectToMap = z.record(z.string(), z.number())
+  .transform((obj) => new Map(Object.entries(obj)));
+
+const input = { a: 1, b: 2 };
+const result = ObjectToMap.parse(input);
+// result: Map<string, number>
+
+type Result = z.infer<typeof ObjectToMap>;
+// Map<string, number>
+```
+
+## Related
+
+- [z.record()](/api/complex/record) - For plain object key-value pairs
+- [z.set()](/api/complex/set) - For Set data structures
+- [z.object()](/api/complex/object) - For fixed object shapes

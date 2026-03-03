@@ -1,0 +1,262 @@
+---
+title: NanoID Validation
+description: Validate NanoIDs with z.nanoid()
+---
+
+## Overview
+
+The `z.nanoid()` function validates NanoIDs - compact, URL-safe unique identifiers designed as a smaller, faster alternative to UUIDs.
+
+```typescript
+import { z } from "zod";
+
+const nanoidSchema = z.nanoid();
+```
+
+**Location in source:** `~/workspace/source/packages/zod/src/v4/classic/schemas.ts:549`
+
+## Basic Usage
+
+```typescript
+const schema = z.nanoid();
+
+schema.parse("lfNZluvAxMkf7Q8C5H-QS"); // ✓ passes
+schema.parse("invalid nanoid"); // ✗ throws
+```
+
+## Validation Rules
+
+A valid NanoID must:
+
+1. Be exactly **21 characters** long
+2. Contain only: `a-z`, `A-Z`, `0-9`, `_` (underscore), `-` (hyphen)
+3. Match pattern: `/^[a-zA-Z0-9_-]{21}$/`
+
+### Valid Examples
+
+```typescript
+const schema = z.nanoid();
+
+schema.parse("lfNZluvAxMkf7Q8C5H-QS"); // ✓ passes
+schema.parse("mIU_4PJWikaU8fMbmkouz"); // ✓ passes
+schema.parse("Hb9ZUtUa2JDm_dD-47EGv"); // ✓ passes
+schema.parse("5Noocgv_8vQ9oPijj4ioQ"); // ✓ passes
+schema.parse("ySh_984wpDUu7IQRrLXAp"); // ✓ passes
+```
+
+### Invalid Examples
+
+```typescript
+const schema = z.nanoid();
+
+// Too long (22 characters)
+schema.safeParse("Xq90uDyhddC53KsoASYJGX").success; // false
+
+// Contains spaces
+schema.safeParse("invalid nanoid").success; // false
+
+// Too short
+schema.safeParse("lfNZluvAxMkf7Q8C5H-Q").success; // false
+
+// Invalid characters
+schema.safeParse("lfNZluvAxMkf7Q8C5H QS").success; // false
+schema.safeParse("lfNZluvAxMkf7Q8C5H@QS").success; // false
+```
+
+## Custom Error Message
+
+```typescript
+const schema = z.nanoid("Please provide a valid NanoID");
+
+const result = schema.safeParse("invalid");
+if (!result.success) {
+  console.log(result.error.issues[0].message);
+  // "Please provide a valid NanoID"
+}
+```
+
+## Error Details
+
+When validation fails, the error includes the expected pattern:
+
+```typescript
+const schema = z.nanoid("custom error");
+
+const result = schema.safeParse("Xq90uDyhddC53KsoASYJGX");
+if (!result.success) {
+  console.log(result.error.issues[0]);
+  /*
+  {
+    origin: "string",
+    code: "invalid_format",
+    format: "nanoid",
+    pattern: "/^[a-zA-Z0-9_-]{21}$/",
+    path: [],
+    message: "custom error"
+  }
+  */
+}
+```
+
+## Parameters
+
+```typescript
+z.nanoid(params?: string | NanoIDParams)
+```
+
+- `string`: Custom error message
+- `NanoIDParams`: Object with:
+  - `message?: string`: Custom error message
+
+## Examples
+
+### Database Primary Key
+
+```typescript
+const postSchema = z.object({
+  id: z.nanoid(),
+  title: z.string(),
+  content: z.string(),
+  authorId: z.nanoid(),
+});
+
+postSchema.parse({
+  id: "lfNZluvAxMkf7Q8C5H-QS",
+  title: "My Post",
+  content: "Post content here",
+  authorId: "mIU_4PJWikaU8fMbmkouz"
+}); // ✓ passes
+```
+
+### API Request Tracking
+
+```typescript
+const requestSchema = z.object({
+  requestId: z.nanoid(),
+  timestamp: z.date(),
+  data: z.record(z.unknown()),
+});
+
+const request = requestSchema.parse({
+  requestId: "Hb9ZUtUa2JDm_dD-47EGv",
+  timestamp: new Date(),
+  data: { foo: "bar" }
+});
+```
+
+### URL-Safe Identifiers
+
+```typescript
+const shortLinkSchema = z.object({
+  slug: z.nanoid(),
+  url: z.url(),
+});
+
+shortLinkSchema.parse({
+  slug: "5Noocgv_8vQ9oPijj4ioQ",
+  url: "https://example.com/very-long-url"
+});
+
+// Can be used in URLs safely
+const shortUrl = `https://short.link/${slug}`;
+// https://short.link/5Noocgv_8vQ9oPijj4ioQ
+```
+
+### Form Validation
+
+```typescript
+const formSchema = z.object({
+  sessionId: z.nanoid("Invalid session ID"),
+  userId: z.nanoid("Invalid user ID"),
+  action: z.string(),
+});
+
+const result = formSchema.safeParse({
+  sessionId: "invalid",
+  userId: "lfNZluvAxMkf7Q8C5H-QS",
+  action: "submit"
+});
+// Returns error for invalid sessionId
+```
+
+### Optional NanoID
+
+```typescript
+const schema = z.object({
+  id: z.nanoid(),
+  parentId: z.nanoid().optional(),
+});
+
+schema.parse({
+  id: "lfNZluvAxMkf7Q8C5H-QS",
+  // parentId is optional
+}); // ✓ passes
+```
+
+## Return Type
+
+Returns a `ZodNanoID` schema that validates and returns strings.
+
+```typescript
+type Output = string;
+type Input = string;
+```
+
+## NanoID Characteristics
+
+### Advantages
+
+- **Compact**: Only 21 characters (vs 36 for UUIDs)
+- **URL-safe**: No special encoding needed
+- **Fast**: Simple generation algorithm
+- **Collision-resistant**: 2^126 unique IDs (vs 2^122 for UUID v4)
+- **Readable**: Uses a larger alphabet than hex
+
+### Limitations
+
+- **Fixed length**: Always 21 characters (not configurable in validator)
+- **Not sortable**: Random generation, no time component
+- **Case-sensitive**: Must preserve exact casing
+
+<Note>
+  NanoIDs are designed to be URL-safe and don't require special encoding when used in URLs, making them ideal for public-facing identifiers like short links, share URLs, and API endpoints.
+</Note>
+
+## Use Cases
+
+### When to Use NanoID
+
+- Short URLs and slugs
+- Public-facing IDs
+- Session identifiers
+- API keys (combined with other security measures)
+- Database primary keys (when size matters)
+- Client-generated IDs
+- Mobile applications (smaller payload)
+
+### When NOT to Use NanoID
+
+- When you need sortable IDs (use UUID v7 or ULID)
+- When you need specific length requirements
+- When case-insensitivity is required
+- Legacy systems expecting UUIDs
+
+<Warning>
+  The validator checks for the standard 21-character NanoID format. If your application uses custom NanoID lengths or alphabets, you'll need to create a custom validator using `z.stringFormat()` or `z.string().regex()`.
+</Warning>
+
+## Comparison with Other IDs
+
+| Feature | NanoID | UUID v4 | CUID2 |
+|---------|--------|---------|-------|
+| Length | 21 | 36 | 24-32 |
+| URL-safe | Yes | No (hyphens) | Yes |
+| Sortable | No | No | No |
+| Collision resistance | High | High | High |
+| Size (bytes) | 21 | 36 | 24-32 |
+
+## Related Methods
+
+- [z.uuid()](/api/formats/uuid) - UUID validation
+- [z.cuid()](/api/formats/cuid) - CUID validation
+- [z.string().regex()](/api/primitives/string#regex) - Custom pattern validation

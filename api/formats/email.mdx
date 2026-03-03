@@ -1,0 +1,139 @@
+---
+title: Email Validation
+description: Validate email addresses with z.email()
+---
+
+## Overview
+
+The `z.email()` function creates a schema that validates email addresses according to a relaxed RFC 5322 standard.
+
+```typescript
+import { z } from "zod";
+
+const emailSchema = z.email();
+```
+
+**Location in source:** `~/workspace/source/packages/zod/src/v4/classic/schemas.ts:455`
+
+## Basic Usage
+
+```typescript
+const emailSchema = z.email();
+
+emailSchema.parse("user@example.com"); // ✓ passes
+emailSchema.parse("invalid@"); // ✗ throws ZodError
+```
+
+## Validation Rules
+
+The email validator accepts a wide range of valid email formats:
+
+### Valid Email Formats
+
+- Standard format: `email@domain.com`
+- With dots: `firstname.lastname@domain.com`
+- Subdomains: `email@subdomain.domain.com`
+- Plus addressing: `firstname+lastname@domain.com`
+- Numbers: `1234567890@domain.com`
+- Hyphens in domain: `email@domain-one.com`
+- Underscores: `_______@domain.com`
+- Multiple TLDs: `email@domain.co.jp`
+- Hyphens in local part: `firstname-lastname@domain.com`
+- Single character: `x@example.com`
+- Short domains: `a@b.cd`
+
+### Invalid Email Formats
+
+The validator rejects:
+
+- Missing domain: `@domain.com`
+- Missing @ symbol: `email.domain.com`
+- Multiple @ symbols: `email@domain@domain.com`
+- Leading/trailing dots: `.email@domain.com`, `email.@domain.com`
+- Consecutive dots: `email..email@domain.com`
+- Invalid domain: `email@domain`
+- Domain starting with hyphen: `email@-domain.com`
+- Non-ASCII characters: `あいうえお@domain.com`
+- Quoted strings: `"email"@domain.com` (not supported)
+- IP addresses: `email@123.123.123.123` (not supported)
+- IPv6 addresses: `email@[IPv6:...]` (not supported)
+
+## Examples
+
+### Basic Validation
+
+```typescript
+const schema = z.email();
+
+schema.parse("user@example.com"); // ✓ passes
+schema.parse("firstname.lastname@company.co.uk"); // ✓ passes
+schema.parse("invalid@"); // ✗ throws
+```
+
+### Custom Error Message
+
+```typescript
+const schema = z.email("Please enter a valid email address");
+
+const result = schema.safeParse("invalid-email");
+if (!result.success) {
+  console.log(result.error.issues[0].message);
+  // "Please enter a valid email address"
+}
+```
+
+### Combining with Other Validations
+
+```typescript
+const schema = z.email()
+  .min(10, "Email must be at least 10 characters")
+  .max(100, "Email must not exceed 100 characters")
+  .toLowerCase();
+
+schema.parse("SHORT@E.CO"); // ✗ fails min length check
+schema.parse("longemail@example.com"); // ✓ passes and converts to lowercase
+```
+
+### In Object Schemas
+
+```typescript
+const userSchema = z.object({
+  email: z.email(),
+  name: z.string(),
+});
+
+userSchema.parse({
+  email: "user@example.com",
+  name: "John Doe"
+}); // ✓ passes
+```
+
+## Parameters
+
+The `email()` function accepts an optional parameter:
+
+```typescript
+z.email(params?: string | EmailParams)
+```
+
+- `string`: Custom error message
+- `EmailParams`: Object with:
+  - `message?: string`: Custom error message
+
+## Return Type
+
+Returns a `ZodEmail` schema that validates and returns strings.
+
+```typescript
+type Output = string;
+type Input = string;
+```
+
+<Note>
+  The email validator uses a practical implementation that balances correctness with usability. It does not support all technically valid RFC 5322 formats (like quoted strings or IP addresses) to avoid common security issues and edge cases.
+</Note>
+
+## Related Methods
+
+- [z.string()](/api/primitives/string) - Base string validation
+- [z.url()](/api/formats/url) - URL validation

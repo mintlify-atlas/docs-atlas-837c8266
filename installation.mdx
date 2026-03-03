@@ -1,0 +1,130 @@
+---
+title: Installation
+description: Install Zod in your Node.js, Deno, or Bun project
+---
+
+## Package Manager Installation
+
+Install Zod using your preferred package manager:
+
+<CodeGroup>
+
+```bash npm
+npm install zod
+```
+
+```bash yarn
+yarn add zod
+```
+
+```bash pnpm
+pnpm add zod
+```
+
+```bash bun
+bun add zod
+```
+
+</CodeGroup>
+
+## Requirements
+
+<Note>
+  Zod requires TypeScript 4.5+ for the best experience. You can use Zod with plain JavaScript, but you'll miss out on static type inference.
+</Note>
+
+- **TypeScript**: 4.5 or higher (recommended)
+- **Node.js**: Works with all modern versions
+- **Browsers**: Works in all modern browsers
+
+## Runtime-Specific Setup
+
+### Node.js
+
+Zod works out of the box with Node.js. Just import it in your code:
+
+```typescript
+import * as z from "zod";
+
+// or using CommonJS
+const z = require("zod");
+```
+
+### Deno
+
+You can import Zod directly from npm in Deno:
+
+```typescript
+import * as z from "npm:zod@latest";
+
+const schema = z.string();
+schema.parse("hello");
+```
+
+<Tip>
+  Deno has built-in TypeScript support, so you get full type inference without additional configuration.
+</Tip>
+
+### Bun
+
+Bun has native support for npm packages:
+
+```bash
+bun add zod
+```
+
+Then import as usual:
+
+```typescript
+import * as z from "zod";
+
+const schema = z.number();
+schema.parse(42);
+```
+
+## Verify Installation
+
+Create a simple test file to verify Zod is installed correctly:
+
+```typescript test.ts
+import * as z from "zod";
+
+const schema = z.string();
+
+try {
+  const result = schema.parse("hello");
+  console.log("Success:", result);
+} catch (error) {
+  console.error("Error:", error);
+}
+```
+
+Run the file:
+
+<CodeGroup>
+
+```bash Node.js
+node test.ts
+```
+
+```bash Deno
+deno run test.ts
+```
+
+```bash Bun
+bun test.ts
+```
+
+</CodeGroup>
+
+You should see:
+
+```
+Success: hello
+```
+
+## Next Steps
+
+<Card title="Quick Start Tutorial" icon="graduation-cap" href="/quickstart">
+  Learn the fundamentals with a hands-on tutorial
+</Card>

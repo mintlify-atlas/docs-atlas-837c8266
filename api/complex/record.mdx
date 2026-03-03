@@ -1,0 +1,419 @@
+---
+title: 'z.record()'
+description: 'Define key-value object schemas with dynamic keys'
+---
+
+## Basic Usage
+
+Create a schema for objects with dynamic keys, where all values share the same type.
+
+```typescript
+import { z } from 'zod';
+
+const StringRecord = z.record(z.string(), z.number());
+
+StringRecord.parse({
+  alice: 100,
+  bob: 200,
+}); // ✓ Valid
+
+StringRecord.parse({
+  alice: 100,
+  bob: 'invalid',
+}); // ✗ Invalid - value must be number
+
+type StringRecord = z.infer<typeof StringRecord>;
+// Record<string, number>
+// Same as: { [key: string]: number }
+```
+
+## Signature
+
+```typescript
+function record<Key extends ZodRecordKey, Value extends SomeType>(
+  keyType: Key,
+  valueType: Value,
+  params?: string | ZodRecordParams
+): ZodRecord<Key, Value>
+```
+
+<ParamField path="keyType" type="ZodString | ZodNumber | ZodEnum" required>
+  Schema to validate keys. Can be `z.string()`, `z.number()`, or `z.enum()`.
+</ParamField>
+
+<ParamField path="valueType" type="ZodType" required>
+  Schema to validate all values.
+</ParamField>
+
+<ParamField path="params" type="string | ZodRecordParams">
+  Optional error message (string) or configuration object.
+</ParamField>
+
+## Properties
+
+<ParamField path="keyType" type="ZodType">
+  Access the key schema.
+  
+  ```typescript
+  const schema = z.record(z.string(), z.number());
+  schema.keyType; // ZodString
+  ```
+</ParamField>
+
+<ParamField path="valueType" type="ZodType">
+  Access the value schema.
+  
+  ```typescript
+  const schema = z.record(z.string(), z.number());
+  schema.valueType; // ZodNumber
+  ```
+</ParamField>
+
+## Key Types
+
+### String Keys
+
+Most common use case:
+
+```typescript
+const StringKeys = z.record(z.string(), z.boolean());
+
+type StringKeys = z.infer<typeof StringKeys>;
+// Record<string, boolean>
+
+StringKeys.parse({
+  feature1: true,
+  feature2: false,
+}); // ✓ Valid
+```
+
+### Number Keys
+
+For numeric indices:
+
+```typescript
+const NumberKeys = z.record(z.number(), z.string());
+
+type NumberKeys = z.infer<typeof NumberKeys>;
+// Record<number, string>
+
+NumberKeys.parse({
+  0: 'first',
+  1: 'second',
+  2: 'third',
+}); // ✓ Valid
+```
+
+<Note>
+In JavaScript, numeric keys are automatically converted to strings. The schema accepts both `{ 0: 'value' }` and `{ '0': 'value' }`.
+</Note>
+
+### Enum Keys
+
+Restrict keys to specific values:
+
+```typescript
+const Status = z.enum(['idle', 'loading', 'success', 'error']);
+const StatusMessages = z.record(Status, z.string());
+
+type StatusMessages = z.infer<typeof StatusMessages>;
+// Record<"idle" | "loading" | "success" | "error", string>
+
+StatusMessages.parse({
+  idle: 'Ready to start',
+  loading: 'Loading...',
+  success: 'Complete!',
+  error: 'Failed',
+}); // ✓ Valid
+
+StatusMessages.parse({
+  idle: 'Ready',
+  unknown: 'Invalid', // ✗ Invalid - unknown key
+});
+```
+
+## Complex Value Types
+
+### Object Values
+
+```typescript
+const UserRecords = z.record(
+  z.string(),
+  z.object({
+    name: z.string(),
+    age: z.number(),
+    email: z.string().email(),
+  })
+);
+
+type UserRecords = z.infer<typeof UserRecords>;
+// Record<string, { name: string; age: number; email: string }>
+
+UserRecords.parse({
+  user1: { name: 'Alice', age: 30, email: 'alice@example.com' },
+  user2: { name: 'Bob', age: 25, email: 'bob@example.com' },
+}); // ✓ Valid
+```
+
+### Array Values
+
+```typescript
+const TagLists = z.record(z.string(), z.array(z.string()));
+
+type TagLists = z.infer<typeof TagLists>;
+// Record<string, string[]>
+
+TagLists.parse({
+  article1: ['javascript', 'typescript', 'zod'],
+  article2: ['react', 'hooks'],
+}); // ✓ Valid
+```
+
+### Union Values
+
+```typescript
+const MixedConfig = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean()])
+);
+
+type MixedConfig = z.infer<typeof MixedConfig>;
+// Record<string, string | number | boolean>
+
+MixedConfig.parse({
+  host: 'localhost',
+  port: 3000,
+  debug: true,
+}); // ✓ Valid
+```
+
+## Partial Records
+
+Create records where not all keys are required:
+
+```typescript
+const Features = z.enum(['dark-mode', 'analytics', 'notifications']);
+
+// Regular record - all keys required
+const AllFeatures = z.record(Features, z.boolean());
+AllFeatures.parse({
+  'dark-mode': true,
+  'analytics': false,
+  'notifications': true,
+}); // ✓ Valid - all keys present
+
+// Partial record - keys optional
+const SomeFeatures = z.partialRecord(Features, z.boolean());
+SomeFeatures.parse({
+  'dark-mode': true,
+}); // ✓ Valid - partial keys allowed
+
+type SomeFeatures = z.infer<typeof SomeFeatures>;
+// Partial<Record<"dark-mode" | "analytics" | "notifications", boolean>>
+```
+
+**Signature:**
+
+```typescript
+function partialRecord<Key extends ZodRecordKey, Value extends SomeType>(
+  keyType: Key,
+  valueType: Value,
+  params?: string | ZodRecordParams
+): ZodRecord<Key & Partial, Value>
+```
+
+## Loose Records
+
+Create records that allow unrecognized keys:
+
+```typescript
+const RequiredFields = z.enum(['id', 'name']);
+const LooseRecord = z.looseRecord(RequiredFields, z.string());
+
+LooseRecord.parse({
+  id: '123',
+  name: 'Alice',
+  email: 'alice@example.com', // Extra keys allowed
+  phone: '555-0100',
+}); // ✓ Valid
+
+type LooseRecord = z.infer<typeof LooseRecord>;
+// Record<"id" | "name", string> & { [key: string]: unknown }
+```
+
+**Signature:**
+
+```typescript
+function looseRecord<Key extends ZodRecordKey, Value extends SomeType>(
+  keyType: Key,
+  valueType: Value,
+  params?: string | ZodRecordParams
+): ZodRecord<Key, Value>
+```
+
+## Type Inference
+
+```typescript
+const schema = z.record(
+  z.string(),
+  z.object({ count: z.number() })
+);
+
+type Output = z.infer<typeof schema>;
+// Record<string, { count: number }>
+
+type Input = z.input<typeof schema>;
+// Same as output for records without transformations
+```
+
+## Common Patterns
+
+### Configuration Objects
+
+```typescript
+const Config = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean()])
+);
+
+type Config = z.infer<typeof Config>;
+// Record<string, string | number | boolean>
+
+const config: Config = {
+  apiUrl: 'https://api.example.com',
+  timeout: 5000,
+  debug: true,
+};
+```
+
+### Translation Dictionaries
+
+```typescript
+const Locales = z.enum(['en', 'es', 'fr']);
+const Translations = z.record(
+  Locales,
+  z.record(z.string(), z.string())
+);
+
+type Translations = z.infer<typeof Translations>;
+// Record<"en" | "es" | "fr", Record<string, string>>
+
+const translations: Translations = {
+  en: { greeting: 'Hello', farewell: 'Goodbye' },
+  es: { greeting: 'Hola', farewell: 'Adiós' },
+  fr: { greeting: 'Bonjour', farewell: 'Au revoir' },
+};
+```
+
+### Counters and Metrics
+
+```typescript
+const Metrics = z.record(z.string(), z.number().nonnegative());
+
+type Metrics = z.infer<typeof Metrics>;
+// Record<string, number>
+
+const metrics: Metrics = {
+  pageViews: 1000,
+  uniqueVisitors: 250,
+  bounceRate: 0.35,
+};
+```
+
+### Entity Stores
+
+```typescript
+const User = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+});
+
+const UserStore = z.record(z.string(), User);
+
+type UserStore = z.infer<typeof UserStore>;
+// Record<string, { id: string; name: string; email: string }>
+
+const store: UserStore = {
+  'user-1': { id: 'user-1', name: 'Alice', email: 'alice@example.com' },
+  'user-2': { id: 'user-2', name: 'Bob', email: 'bob@example.com' },
+};
+```
+
+## Refinements
+
+Add custom validation:
+
+```typescript
+const NonEmptyRecord = z.record(z.string(), z.number())
+  .refine(
+    (record) => Object.keys(record).length > 0,
+    'Record cannot be empty'
+  );
+
+NonEmptyRecord.parse({ a: 1 }); // ✓ Valid
+NonEmptyRecord.parse({});       // ✗ Invalid - empty record
+```
+
+```typescript
+const AllPositive = z.record(z.string(), z.number())
+  .refine(
+    (record) => Object.values(record).every(v => v > 0),
+    'All values must be positive'
+  );
+
+AllPositive.parse({ a: 1, b: 2 });   // ✓ Valid
+AllPositive.parse({ a: 1, b: -2 });  // ✗ Invalid - negative value
+```
+
+## Record vs Object
+
+| Feature | Record | Object |
+|---------|--------|--------|
+| **Keys** | Dynamic | Fixed |
+| **Key Type** | String/Number/Enum | String literals |
+| **Value Type** | All same | Can vary |
+| **Type Inference** | `Record<K, V>` | `{ key: Type }` |
+| **Use Case** | Unknown keys | Known structure |
+
+```typescript
+// Record - dynamic keys, same value type
+const record = z.record(z.string(), z.number());
+type Record = z.infer<typeof record>;
+// Record<string, number>
+
+// Object - fixed keys, varying types
+const object = z.object({
+  name: z.string(),
+  age: z.number(),
+});
+type Object = z.infer<typeof object>;
+// { name: string; age: number }
+```
+
+## Transformations
+
+Transform record values:
+
+```typescript
+const Normalized = z.record(z.string(), z.string())
+  .transform((record) => {
+    const normalized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(record)) {
+      normalized[key.toLowerCase()] = value.trim();
+    }
+    return normalized;
+  });
+
+const result = Normalized.parse({
+  'FIRST_NAME': '  Alice  ',
+  'LAST_NAME': '  Smith  ',
+});
+// result: { first_name: 'Alice', last_name: 'Smith' }
+```
+
+## Related
+
+- [z.object()](/api/complex/object) - For fixed object shapes
+- [z.map()](/api/complex/map) - For Map data structures
+- [z.enum()](/api/primitives/enum) - For restricting record keys

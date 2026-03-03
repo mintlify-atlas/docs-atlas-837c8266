@@ -1,0 +1,307 @@
+---
+title: z.bigint()
+description: BigInt schema type with validations
+---
+
+## Basic Usage
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.bigint();
+schema.parse(BigInt(42)); // 42n
+schema.parse(42n); // 42n
+schema.parse(42); // throws ZodError
+schema.parse("42"); // throws ZodError
+```
+
+## Type Signature
+
+```typescript
+function bigint(params?: string | $ZodBigIntParams): ZodBigInt
+```
+
+<ParamField path="params" type="string | $ZodBigIntParams" optional>
+  Optional error message (string) or configuration object
+</ParamField>
+
+## Comparison Methods
+
+### `.gt()`
+
+Greater than (exclusive).
+
+```typescript
+const schema = z.bigint().gt(BigInt(5));
+schema.parse(6n); // 6n
+schema.parse(5n); // throws
+```
+
+<ParamField path="value" type="bigint" required>
+  Exclusive minimum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.gte()` / `.min()`
+
+Greater than or equal (inclusive). `.min()` is an alias for `.gte()`.
+
+```typescript
+const schema = z.bigint().gte(5n);
+schema.parse(5n); // 5n
+schema.parse(6n); // 6n
+schema.parse(4n); // throws
+
+// Equivalent
+const schema2 = z.bigint().min(5n);
+```
+
+<ParamField path="value" type="bigint" required>
+  Inclusive minimum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.lt()`
+
+Less than (exclusive).
+
+```typescript
+const schema = z.bigint().lt(5n);
+schema.parse(4n); // 4n
+schema.parse(5n); // throws
+```
+
+<ParamField path="value" type="bigint" required>
+  Exclusive maximum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.lte()` / `.max()`
+
+Less than or equal (inclusive). `.max()` is an alias for `.lte()`.
+
+```typescript
+const schema = z.bigint().lte(5n);
+schema.parse(5n); // 5n
+schema.parse(4n); // 4n
+schema.parse(6n); // throws
+
+// Equivalent
+const schema2 = z.bigint().max(5n);
+```
+
+<ParamField path="value" type="bigint" required>
+  Inclusive maximum value
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+## Sign Validations
+
+### `.positive()`
+
+Requires bigint to be greater than zero.
+
+```typescript
+const schema = z.bigint().positive();
+schema.parse(1n); // 1n
+schema.parse(0n); // throws
+schema.parse(-1n); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.negative()`
+
+Requires bigint to be less than zero.
+
+```typescript
+const schema = z.bigint().negative();
+schema.parse(-1n); // -1n
+schema.parse(0n); // throws
+schema.parse(1n); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.nonnegative()`
+
+Requires bigint to be greater than or equal to zero.
+
+```typescript
+const schema = z.bigint().nonnegative();
+schema.parse(0n); // 0n
+schema.parse(1n); // 1n
+schema.parse(-1n); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.nonpositive()`
+
+Requires bigint to be less than or equal to zero.
+
+```typescript
+const schema = z.bigint().nonpositive();
+schema.parse(0n); // 0n
+schema.parse(-1n); // -1n
+schema.parse(1n); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+## Multiple Of
+
+### `.multipleOf()`
+
+Requires bigint to be a multiple of a given value.
+
+```typescript
+const schema = z.bigint().multipleOf(5n);
+schema.parse(15n); // 15n
+schema.parse(-15n); // -15n
+schema.parse(13n); // throws
+```
+
+<ParamField path="value" type="bigint" required>
+  The divisor
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckMultipleOfParams" optional>
+  Custom error message
+</ParamField>
+
+## Properties
+
+### `.minValue`
+
+Returns the minimum value constraint, or `null` if not set.
+
+```typescript
+z.bigint().minValue; // null
+z.bigint().min(5n).minValue; // 5n
+z.bigint().gte(5n).minValue; // 5n
+z.bigint().nonnegative().minValue; // 0n
+```
+
+### `.maxValue`
+
+Returns the maximum value constraint, or `null` if not set.
+
+```typescript
+z.bigint().maxValue; // null
+z.bigint().max(5n).maxValue; // 5n
+z.bigint().lte(5n).maxValue; // 5n
+z.bigint().nonpositive().maxValue; // 0n
+```
+
+### `.format`
+
+Returns the format string if set, or `null`.
+
+```typescript
+z.bigint().format; // null
+z.int64().format; // "int64"
+z.uint64().format; // "uint64"
+```
+
+## Specialized BigInt Formats
+
+Use these for specific 64-bit integer types:
+
+### `z.int64()`
+
+Signed 64-bit integer.
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.int64();
+schema.parse(9223372036854775807n); // max int64
+```
+
+<ParamField path="params" type="string | $ZodBigIntFormatParams" optional>
+  Optional error message
+</ParamField>
+
+### `z.uint64()`
+
+Unsigned 64-bit integer.
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.uint64();
+schema.parse(18446744073709551615n); // max uint64
+schema.parse(-1n); // throws
+```
+
+<ParamField path="params" type="string | $ZodBigIntFormatParams" optional>
+  Optional error message
+</ParamField>
+
+## Use Cases
+
+BigInt is useful for:
+
+- Large integers beyond `Number.MAX_SAFE_INTEGER` (2^53 - 1)
+- Precise integer arithmetic
+- Cryptographic operations
+- Working with blockchain/cryptocurrency values
+- Database IDs (e.g., Twitter snowflake IDs)
+
+```typescript
+// Twitter snowflake IDs
+const tweetId = z.bigint().positive();
+
+// Cryptocurrency amounts (e.g., wei in Ethereum)
+const weiAmount = z.bigint().nonnegative();
+
+// Large database counters
+const counter = z.bigint().min(0n);
+```
+
+## Chaining
+
+All methods return `this`, enabling chaining:
+
+```typescript
+const schema = z.bigint()
+  .min(0n)
+  .max(1000000n)
+  .multipleOf(100n);
+```
+
+## TypeScript Type
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.bigint();
+type BigIntType = z.infer<typeof schema>; // bigint
+```
+
+## See Also
+
+- [z.number()](/api/primitives/number) - For numbers within safe integer range
+- [z.int64()](/api/numbers/int64) - Signed 64-bit integers
+- [z.uint64()](/api/numbers/uint64) - Unsigned 64-bit integers

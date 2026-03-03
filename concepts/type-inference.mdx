@@ -1,0 +1,533 @@
+---
+title: Type Inference
+description: Extract TypeScript types from Zod schemas using z.infer, z.input, and z.output
+---
+
+## Overview
+
+One of Zod's most powerful features is **automatic type inference**. You define validation logic once, and TypeScript types are automatically generated.
+
+## Basic Type Inference with z.infer
+
+Use `z.infer<typeof schema>` to extract the TypeScript type:
+
+```typescript
+import { z } from 'zod';
+
+const User = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number().optional(),
+});
+
+// Extract type
+type User = z.infer<typeof User>;
+// Equivalent to:
+// type User = {
+//   id: number;
+//   name: string;
+//   email: string;
+//   age?: number;
+// }
+
+// Use the type
+const user: User = {
+  id: 1,
+  name: 'Alice',
+  email: 'alice@example.com',
+};
+```
+
+<Note>
+`z.infer` is actually an alias for `z.output`. They are identical and interchangeable.
+</Note>
+
+## Primitive Types
+
+```typescript
+const str = z.string();
+type Str = z.infer<typeof str>; // string
+
+const num = z.number();
+type Num = z.infer<typeof num>; // number
+
+const bool = z.boolean();
+type Bool = z.infer<typeof bool>; // boolean
+
+const bigInt = z.bigint();
+type BigInt = z.infer<typeof bigInt>; // bigint
+
+const date = z.date();
+type DateType = z.infer<typeof date>; // Date
+
+const undef = z.undefined();
+type Undef = z.infer<typeof undef>; // undefined
+
+const nul = z.null();
+type Nul = z.infer<typeof nul>; // null
+```
+
+## Complex Types
+
+### Arrays
+
+```typescript
+const stringArray = z.array(z.string());
+type StringArray = z.infer<typeof stringArray>; // string[]
+
+const userArray = z.array(User);
+type UserArray = z.infer<typeof userArray>; // User[]
+```
+
+### Objects
+
+```typescript
+const Person = z.object({
+  firstName: z.string(),
+  lastName: z.string(),
+  age: z.number(),
+  address: z.object({
+    street: z.string(),
+    city: z.string(),
+    country: z.string(),
+  }),
+});
+
+type Person = z.infer<typeof Person>;
+// {
+//   firstName: string;
+//   lastName: string;
+//   age: number;
+//   address: {
+//     street: string;
+//     city: string;
+//     country: string;
+//   };
+// }
+```
+
+### Unions
+
+```typescript
+const StringOrNumber = z.union([z.string(), z.number()]);
+type StringOrNumber = z.infer<typeof StringOrNumber>; // string | number
+
+const Result = z.union([
+  z.object({ success: z.literal(true), data: z.string() }),
+  z.object({ success: z.literal(false), error: z.string() }),
+]);
+type Result = z.infer<typeof Result>;
+// { success: true; data: string } | { success: false; error: string }
+```
+
+### Enums
+
+```typescript
+const Fruit = z.enum(['apple', 'banana', 'orange']);
+type Fruit = z.infer<typeof Fruit>; // 'apple' | 'banana' | 'orange'
+
+const Status = z.enum(['pending', 'active', 'inactive']);
+type Status = z.infer<typeof Status>; // 'pending' | 'active' | 'inactive'
+```
+
+## Optional and Nullable Types
+
+```typescript
+const optionalString = z.string().optional();
+type OptionalString = z.infer<typeof optionalString>; // string | undefined
+
+const nullableString = z.string().nullable();
+type NullableString = z.infer<typeof nullableString>; // string | null
+
+const nullishString = z.string().nullish();
+type NullishString = z.infer<typeof nullishString>; // string | null | undefined
+
+// In objects
+const Schema = z.object({
+  required: z.string(),
+  optional: z.string().optional(),
+  nullable: z.string().nullable(),
+});
+
+type Schema = z.infer<typeof Schema>;
+// {
+//   required: string;
+//   optional?: string | undefined;
+//   nullable: string | null;
+// }
+```
+
+## z.input vs z.output
+
+When schemas include transformations, the **input** type (before transformation) differs from the **output** type (after transformation).
+
+### Understanding Input and Output
+
+```typescript
+const schema = z.string().transform((val) => val.length);
+
+type Input = z.input<typeof schema>;   // string
+type Output = z.output<typeof schema>; // number
+```
+
+From `packages/zod/src/v4/classic/tests/transform.test.ts:170-174`:
+
+```typescript
+const stringToNumber = z.string().transform((arg) => Number.parseFloat(arg));
+
+const t1 = z.object({ stringToNumber });
+
+type Input = z.input<typeof t1>;   // { stringToNumber: string }
+type Output = z.output<typeof t1>; // { stringToNumber: number }
+```
+
+### When They Differ
+
+<Steps>
+
+### Transformations
+
+```typescript
+const NumberFromString = z.string().transform(Number);
+
+type Input = z.input<typeof NumberFromString>;   // string
+type Output = z.output<typeof NumberFromString>; // number
+
+const result = NumberFromString.parse('42'); // result is number
+```
+
+### Defaults
+
+```typescript
+const WithDefault = z.string().default('hello');
+
+type Input = z.input<typeof WithDefault>;   // string | undefined
+type Output = z.output<typeof WithDefault>; // string
+
+// Input can be undefined, output is always string
+const result = WithDefault.parse(undefined); // 'hello'
+```
+
+### Preprocessing
+
+```typescript
+const Preprocessed = z.preprocess(
+  (val) => String(val),
+  z.string()
+);
+
+type Input = z.input<typeof Preprocessed>;   // unknown
+type Output = z.output<typeof Preprocessed>; // string
+```
+
+### Pipes
+
+```typescript
+const Piped = z.string().pipe(z.number());
+
+type Input = z.input<typeof Piped>;   // string
+type Output = z.output<typeof Piped>; // number
+```
+
+</Steps>
+
+### Practical Example: Form Coercion
+
+```typescript
+const FormSchema = z.object({
+  name: z.string(),
+  age: z.string().transform(Number),
+  subscribe: z.string().transform((val) => val === 'true'),
+});
+
+type FormInput = z.input<typeof FormSchema>;
+// {
+//   name: string;
+//   age: string;
+//   subscribe: string;
+// }
+
+type FormOutput = z.output<typeof FormSchema>;
+// {
+//   name: string;
+//   age: number;
+//   subscribe: boolean;
+// }
+
+// Usage
+const formData = new FormData();
+const input: FormInput = {
+  name: formData.get('name') as string,
+  age: formData.get('age') as string,
+  subscribe: formData.get('subscribe') as string,
+};
+
+const output: FormOutput = FormSchema.parse(input);
+// output.age is a number
+// output.subscribe is a boolean
+```
+
+## Type Narrowing with Refinements
+
+Refinements can narrow types using type predicates:
+
+```typescript
+const isValidEmail = (val: string): val is `${string}@${string}` => {
+  return val.includes('@');
+};
+
+const schema = z.string().refine(isValidEmail);
+
+type Input = z.input<typeof schema>;   // string
+type Output = z.output<typeof schema>; // `${string}@${string}`
+```
+
+From `packages/zod/src/v4/classic/tests/refine.test.ts:423-424`:
+
+```typescript
+const schema = z.string().refine((val): val is 'a' => val === 'a');
+
+type Input = z.input<typeof schema>;   // string  
+type Output = z.output<typeof schema>; // 'a'
+```
+
+## Recursive Types
+
+Zod supports recursive type inference:
+
+```typescript
+const Category: z.ZodType<Category> = z.lazy(() =>
+  z.object({
+    name: z.string(),
+    subcategories: z.array(Category),
+  })
+);
+
+type Category = z.infer<typeof Category>;
+// type Category = {
+//   name: string;
+//   subcategories: Category[];
+// }
+```
+
+From `packages/zod/src/v4/classic/tests/recursive-types.test.ts:28-31`:
+
+```typescript
+const Category: z.ZodType<Category> = z.lazy(() =>
+  z.object({
+    name: z.string(),
+    subcategories: z.array(Category),
+  })
+);
+
+type Category = z.infer<typeof Category>;
+```
+
+## Utility Type Helpers
+
+### TypeOf (Alternative to infer)
+
+```typescript
+import { z } from 'zod';
+
+const User = z.object({
+  name: z.string(),
+  age: z.number(),
+});
+
+// Both are equivalent
+type User1 = z.infer<typeof User>;
+type User2 = z.TypeOf<typeof User>;
+```
+
+### Extract from Objects
+
+```typescript
+const User = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+});
+
+// Get keys as type
+type UserKeys = keyof z.infer<typeof User>; // 'id' | 'name' | 'email'
+
+// Pick specific fields
+type UserNameEmail = Pick<z.infer<typeof User>, 'name' | 'email'>;
+// { name: string; email: string }
+```
+
+## Common Patterns
+
+### Sharing Types Between Schema and Interface
+
+```typescript
+// Define schema first
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  createdAt: z.date(),
+});
+
+// Infer type from schema
+type User = z.infer<typeof UserSchema>;
+
+// Use in function signatures
+function createUser(data: z.input<typeof UserSchema>): User {
+  return UserSchema.parse(data);
+}
+
+function updateUser(id: number, data: Partial<User>): User {
+  // ...
+}
+```
+
+### API Request/Response Types
+
+```typescript
+const CreateUserRequest = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+const UserResponse = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+  createdAt: z.string().datetime(),
+});
+
+type CreateUserRequest = z.infer<typeof CreateUserRequest>;
+type UserResponse = z.infer<typeof UserResponse>;
+
+// Use in API handler
+async function createUser(
+  req: CreateUserRequest
+): Promise<UserResponse> {
+  // Implementation
+}
+```
+
+### Generic Type Utilities
+
+```typescript
+// Extract array element type
+type ArrayElement<T> = T extends z.ZodArray<infer U> ? z.infer<U> : never;
+
+const users = z.array(UserSchema);
+type User = ArrayElement<typeof users>; // Inferred User type
+
+// Extract unwrapped optional type
+type Unwrap<T> = T extends z.ZodOptional<infer U> ? z.infer<U> : z.infer<T>;
+
+const optional = z.string().optional();
+type Unwrapped = Unwrap<typeof optional>; // string
+```
+
+## Edge Cases and Special Types
+
+### Literal Types
+
+```typescript
+const literal = z.literal('hello');
+type Literal = z.infer<typeof literal>; // 'hello'
+
+const numLiteral = z.literal(42);
+type NumLiteral = z.infer<typeof numLiteral>; // 42
+
+const boolLiteral = z.literal(true);
+type BoolLiteral = z.infer<typeof boolLiteral>; // true
+```
+
+### Template Literals
+
+```typescript
+const email = z.templateLiteral([
+  z.string(),
+  z.literal('@'),
+  z.string(),
+]);
+type Email = z.infer<typeof email>; // `${string}@${string}`
+```
+
+### Never Type
+
+```typescript
+const never = z.never();
+type Never = z.infer<typeof never>; // never
+```
+
+### Unknown and Any
+
+```typescript
+const unknown = z.unknown();
+type Unknown = z.infer<typeof unknown>; // unknown
+
+const any = z.any();
+type Any = z.infer<typeof any>; // any
+```
+
+## Best Practices
+
+1. **Define schema once, infer types** - Don't duplicate type definitions
+2. **Use z.infer for most cases** - It's an alias for `z.output`
+3. **Use z.input for transformations** - When input differs from output
+4. **Name types same as schema** - Makes code more readable
+5. **Export both schema and type** - Useful for consumers
+
+```typescript
+// Good pattern
+export const UserSchema = z.object({ /* ... */ });
+export type User = z.infer<typeof UserSchema>;
+
+// Consumers can use both
+import { UserSchema, type User } from './schemas';
+```
+
+## TypeScript Integration
+
+### Const Assertions
+
+```typescript
+const values = ['a', 'b', 'c'] as const;
+const schema = z.enum(values);
+type Schema = z.infer<typeof schema>; // 'a' | 'b' | 'c'
+```
+
+### Branded Types
+
+```typescript
+const UserId = z.number().brand('UserId');
+type UserId = z.infer<typeof UserId>; // number & Brand<'UserId'>
+
+// Type-safe, prevents mixing IDs
+function getUser(id: UserId) { /* ... */ }
+getUser(123); // Error: number not assignable to UserId
+```
+
+## Performance Considerations
+
+<Note>
+Type inference happens at compile time and has zero runtime cost. However, complex recursive types can slow down TypeScript compilation.
+</Note>
+
+```typescript
+// Fast type inference
+const simple = z.object({ name: z.string() });
+type Simple = z.infer<typeof simple>;
+
+// Slower type inference (deep recursion)
+const complex = z.lazy(() => z.object({
+  nested: complex.optional(),
+}));
+type Complex = z.infer<typeof complex>;
+```
+
+## Next Steps
+
+- Learn about [Transformations](/concepts/transformations) to modify data during parsing
+- Explore [Refinements](/concepts/refinements) for custom validation with type narrowing
+- Master [Schemas](/concepts/schemas) to understand all available schema types

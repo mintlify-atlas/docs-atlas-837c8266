@@ -1,0 +1,277 @@
+---
+title: CUID Validation
+description: Validate CUIDs with z.cuid() and z.cuid2()
+---
+
+## Overview
+
+Zod provides functions for validating CUIDs (Collision-resistant Unique IDentifiers):
+
+- `z.cuid()` - Validates CUID (original format)
+- `z.cuid2()` - Validates CUID2 (improved format)
+
+```typescript
+import { z } from "zod";
+
+const cuidSchema = z.cuid();
+const cuid2Schema = z.cuid2();
+```
+
+**Location in source:** `~/workspace/source/packages/zod/src/v4/classic/schemas.ts:563-579`
+
+## z.cuid()
+
+Validates the original CUID format. CUIDs are designed to be collision-resistant, horizontally scalable, and offline-first.
+
+### Basic Usage
+
+```typescript
+const schema = z.cuid();
+
+schema.parse("ckopqwooh000001la8mbi2im9"); // ✓ passes
+schema.parse("invalid-cuid"); // ✗ throws
+```
+
+### Validation Rules
+
+A valid CUID must:
+
+1. Start with `c` or `C`
+2. Be at least 9 characters long (1 prefix + 8+ characters)
+3. Contain no spaces or hyphens after the prefix
+4. Match pattern: `/^[cC][^\s-]{8,}$/`
+
+### Valid Examples
+
+```typescript
+const schema = z.cuid();
+
+schema.parse("ckopqwooh000001la8mbi2im9"); // ✓ typical CUID
+schema.parse("cl9x2k0010000l80g8j6t9x7y"); // ✓ another valid CUID
+schema.parse("Ckopqwooh000001la8mbi2im9"); // ✓ uppercase C prefix
+```
+
+### Invalid Examples
+
+```typescript
+const schema = z.cuid();
+
+schema.safeParse("cifjhdsfhsd-invalid-cuid").success; // false - contains hyphen
+schema.safeParse("invalid").success; // false - doesn't start with 'c'
+schema.safeParse("c12345").success; // false - too short
+schema.safeParse("ckopq wooh").success; // false - contains space
+```
+
+### Custom Error Message
+
+```typescript
+const schema = z.cuid("Please provide a valid CUID");
+
+const result = schema.safeParse("invalid");
+if (!result.success) {
+  console.log(result.error.issues[0].message);
+  // "Please provide a valid CUID"
+}
+```
+
+### Error Details
+
+```typescript
+const schema = z.cuid();
+
+const result = schema.safeParse("cifjhdsfhsd-invalid-cuid");
+if (!result.success) {
+  console.log(result.error.issues[0]);
+  /*
+  {
+    origin: "string",
+    code: "invalid_format",
+    format: "cuid",
+    pattern: "/^[cC][^\\s-]{8,}$/",
+    path: [],
+    message: "Invalid cuid"
+  }
+  */
+}
+```
+
+## z.cuid2()
+
+Validates CUID2 format, an improved version with better performance and security properties.
+
+### Basic Usage
+
+```typescript
+const schema = z.cuid2();
+
+schema.parse("tz4a98xxat96iws9zmbrgj3a"); // ✓ passes
+schema.parse("a"); // ✓ passes (minimum valid length)
+schema.parse("kf5vz6ssxe4zjcb409rjgo747tc5qjazgptvotk6"); // ✓ passes (long CUID2)
+```
+
+### Validation Rules
+
+A valid CUID2:
+
+1. Can be as short as 1 character
+2. Typically 24-32 characters long (default)
+3. Can be longer depending on configuration
+4. Uses lowercase letters and numbers
+
+### Valid Examples
+
+```typescript
+const schema = z.cuid2();
+
+// Short CUID2
+schema.parse("a");
+
+// Normal length CUID2 (24 chars, default)
+schema.parse("tz4a98xxat96iws9zmbrgj3a");
+
+// Long CUID2 (40+ chars, custom length)
+schema.parse("kf5vz6ssxe4zjcb409rjgo747tc5qjazgptvotk6");
+```
+
+### Custom Error Message
+
+```typescript
+const schema = z.cuid2("Please provide a valid CUID2");
+```
+
+<Note>
+  CUID2 is the recommended format for new projects. It offers improved performance, better security properties, and more flexible length configuration compared to the original CUID.
+</Note>
+
+## Parameters
+
+Both functions accept an optional parameter:
+
+```typescript
+z.cuid(params?: string | CUIDParams)
+z.cuid2(params?: string | CUID2Params)
+```
+
+- `string`: Custom error message
+- Params object:
+  - `message?: string`: Custom error message
+
+## Examples
+
+### Database Primary Keys
+
+```typescript
+const userSchema = z.object({
+  id: z.cuid2(),
+  email: z.email(),
+  createdAt: z.date(),
+});
+
+userSchema.parse({
+  id: "tz4a98xxat96iws9zmbrgj3a",
+  email: "user@example.com",
+  createdAt: new Date()
+}); // ✓ passes
+```
+
+### API Request IDs
+
+```typescript
+const requestSchema = z.object({
+  requestId: z.cuid2(),
+  payload: z.record(z.unknown()),
+});
+```
+
+### Supporting Both Formats (Migration)
+
+```typescript
+const idSchema = z.union([
+  z.cuid(),  // Legacy format
+  z.cuid2(), // New format
+]);
+
+idSchema.parse("ckopqwooh000001la8mbi2im9"); // ✓ CUID
+idSchema.parse("tz4a98xxat96iws9zmbrgj3a"); // ✓ CUID2
+```
+
+### Form Validation with Custom Messages
+
+```typescript
+const formSchema = z.object({
+  userId: z.cuid2("Invalid user ID format"),
+  sessionId: z.cuid2("Invalid session ID format"),
+});
+
+const result = formSchema.safeParse({
+  userId: "invalid",
+  sessionId: "tz4a98xxat96iws9zmbrgj3a"
+});
+// Returns error for invalid userId
+```
+
+## Return Type
+
+Both schemas return strings:
+
+```typescript
+type Output = string;
+type Input = string;
+```
+
+## CUID vs CUID2
+
+### CUID (Original)
+
+**Pros:**
+- Well-established format
+- Widely supported in libraries
+- Fixed length (~25 characters)
+
+**Cons:**
+- Older algorithm
+- Less flexible
+- Potentially slower
+
+### CUID2 (Improved)
+
+**Pros:**
+- Better performance
+- Improved security
+- Configurable length
+- More entropy
+- Smaller default size (24 chars)
+
+**Cons:**
+- Newer format (less ecosystem support)
+- Variable length
+
+<Warning>
+  While CUIDs are designed to be collision-resistant, they are not cryptographically secure. Do not use them for security tokens, passwords, or other security-sensitive purposes.
+</Warning>
+
+## Use Cases
+
+### When to Use CUIDs
+
+- Database primary keys
+- Distributed system IDs
+- Client-generated IDs
+- Offline-first applications
+- Horizontal scaling scenarios
+- Request/transaction tracking
+
+### When NOT to Use CUIDs
+
+- Security tokens
+- Password reset tokens
+- API keys
+- Cryptographic operations
+- When you need sequential IDs
+- When you need lexicographically sortable IDs (use UUID v7 instead)
+
+## Related Methods
+
+- [z.uuid()](/api/formats/uuid) - UUID validation
+- [z.nanoid()](/api/formats/nanoid) - NanoID validation
+- [z.ulid()](/api/formats/ulid) - ULID validation

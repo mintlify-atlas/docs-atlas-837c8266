@@ -1,80 +1,245 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Learn Zod fundamentals in 5 minutes
 ---
 
-## Get started in three steps
+This guide walks you through the core concepts of Zod: defining schemas, parsing data, type inference, and error handling.
 
-Get your documentation site running locally and make your first customization.
+## Schema Definition
 
-### Step 1: Set up your local environment
+A schema defines the shape and validation rules for your data. Start by defining a simple object schema:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```typescript
+import * as z from "zod";
 
-### Step 2: Deploy your changes
+const Player = z.object({
+  username: z.string(),
+  xp: z.number(),
+});
+```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+You can build more complex schemas by composing primitive types:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+```typescript
+const User = z.object({
+  name: z.string(),
+  age: z.number(),
+  email: z.optional(z.string()),
+  isAdmin: z.boolean(),
+});
+```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Tip>
+  Schemas are immutable. Methods like `.check()` and `.optional()` return new schema instances.
+</Tip>
 
-### Step 3: Go live
+## Parsing Data
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<Steps>
 
-## Next steps
+<Step title="Use .parse() for validation">
 
-Now that you have your docs running, explore these key features:
+The `.parse()` method validates input and returns a deep clone if valid. It throws a `ZodError` if validation fails:
 
-<CardGroup cols={2}>
+```typescript
+const Player = z.object({
+  username: z.string(),
+  xp: z.number(),
+});
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+// Valid input
+const result = Player.parse({ username: "billie", xp: 100 });
+console.log(result);
+// => { username: "billie", xp: 100 }
+```
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+</Step>
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+<Step title="Handle validation errors">
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+When parsing fails, Zod throws a detailed error:
 
-</CardGroup>
+```typescript
+try {
+  Player.parse({ username: 42, xp: "100" });
+} catch (err) {
+  if (err instanceof z.core.$ZodRealError) {
+    console.log(err.issues);
+    /* [
+      {
+        expected: 'string',
+        code: 'invalid_type',
+        path: [ 'username' ],
+        message: 'Invalid input: expected string'
+      },
+      {
+        expected: 'number',
+        code: 'invalid_type',
+        path: [ 'xp' ],
+        message: 'Invalid input: expected number'
+      }
+    ] */
+  }
+}
+```
+
+</Step>
+
+<Step title="Use .safeParse() to avoid exceptions">
+
+For error handling without try/catch, use `.safeParse()`. It returns a discriminated union:
+
+```typescript
+const result = Player.safeParse({ username: 42, xp: "100" });
+
+if (!result.success) {
+  // result.error is a ZodError instance
+  console.log(result.error.issues);
+} else {
+  // result.data has the correct type: { username: string; xp: number }
+  console.log(result.data);
+}
+```
+
+</Step>
+
+</Steps>
+
+## Type Inference
+
+Zod automatically infers TypeScript types from your schemas using `z.infer<>` or `z.output<>`:
+
+```typescript
+const Player = z.object({
+  username: z.string(),
+  xp: z.number(),
+});
+
+// Extract the TypeScript type
+type Player = z.infer<typeof Player>;
+// type Player = {
+//   username: string;
+//   xp: number;
+// }
+
+// Use the inferred type
+const player: Player = { username: "billie", xp: 100 };
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  For schemas with transformations, use `z.input<>` to get the input type and `z.output<>` (or `z.infer<>`) to get the output type.
 </Note>
+
+### Input vs Output Types
+
+When you use transforms, input and output types can differ:
+
+```typescript
+const StringToNumber = z.string().check(
+  z.refine((val) => !isNaN(Number(val)))
+);
+
+type Input = z.input<typeof StringToNumber>;  // string
+type Output = z.output<typeof StringToNumber>; // string
+```
+
+## Error Handling
+
+Zod provides detailed error information when validation fails.
+
+### Working with ZodError
+
+Every failed parse produces a `ZodError` with an `issues` array:
+
+```typescript
+const result = z.string().safeParse(123);
+
+if (!result.success) {
+  console.log(result.error.issues);
+  // [{
+  //   code: 'invalid_type',
+  //   expected: 'string',
+  //   received: 'number',
+  //   path: [],
+  //   message: 'Invalid input'
+  // }]
+}
+```
+
+### Custom Error Messages
+
+You can provide custom error messages when defining schemas:
+
+```typescript
+const Email = z.email("Please provide a valid email address");
+
+const result = Email.safeParse("invalid-email");
+if (!result.success) {
+  console.log(result.error.issues[0].message);
+  // => "Please provide a valid email address"
+}
+```
+
+Or use a function for dynamic messages:
+
+```typescript
+const Email = z.email({
+  error: () => "Please provide a valid email address"
+});
+```
+
+## Complete Example
+
+Here's a complete example combining all concepts:
+
+```typescript
+import * as z from "zod";
+
+// Define the schema
+const UserSchema = z.object({
+  name: z.string(),
+  age: z.number(),
+  email: z.optional(z.email("Invalid email format")),
+});
+
+// Infer the TypeScript type
+type User = z.infer<typeof UserSchema>;
+
+// Parse some data
+const input = {
+  name: "John Doe",
+  age: 30,
+  email: "john@example.com",
+};
+
+const result = UserSchema.safeParse(input);
+
+if (result.success) {
+  // Type-safe access to validated data
+  const user: User = result.data;
+  console.log(`Welcome, ${user.name}!`);
+} else {
+  // Handle validation errors
+  console.error("Validation failed:");
+  result.error.issues.forEach((issue) => {
+    console.error(`- ${issue.path.join('.')}: ${issue.message}`);
+  });
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Primitives" icon="shapes" href="/primitives">
+    Explore all primitive types: strings, numbers, dates, and more
+  </Card>
+  <Card title="Objects" icon="cubes" href="/objects">
+    Learn about object schemas, nesting, and composition
+  </Card>
+  <Card title="Arrays & Tuples" icon="list" href="/arrays">
+    Work with arrays, tuples, and collections
+  </Card>
+  <Card title="Advanced Types" icon="wand-magic-sparkles" href="/unions">
+    Master unions, intersections, and discriminated unions
+  </Card>
+</CardGroup>

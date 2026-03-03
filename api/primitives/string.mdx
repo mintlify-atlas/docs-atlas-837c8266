@@ -1,0 +1,331 @@
+---
+title: z.string()
+description: String schema type with validation methods
+---
+
+## Basic Usage
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.string();
+schema.parse("hello"); // "hello"
+schema.parse(123); // throws ZodError
+```
+
+## Type Signature
+
+```typescript
+function string(params?: string | $ZodStringParams): ZodString
+```
+
+<ParamField path="params" type="string | $ZodStringParams" optional>
+  Optional error message (string) or configuration object
+</ParamField>
+
+## Validation Methods
+
+### Length Validations
+
+#### `.min()`
+
+Enforces minimum string length.
+
+```typescript
+const schema = z.string().min(5);
+schema.parse("hello"); // "hello"
+schema.parse("hi"); // throws
+```
+
+<ParamField path="minLength" type="number" required>
+  Minimum length of the string
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckMinLengthParams" optional>
+  Custom error message or params object with `message` property
+</ParamField>
+
+#### `.max()`
+
+Enforces maximum string length.
+
+```typescript
+const schema = z.string().max(5);
+schema.parse("hello"); // "hello"
+schema.parse("hello world"); // throws
+```
+
+<ParamField path="maxLength" type="number" required>
+  Maximum length of the string
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckMaxLengthParams" optional>
+  Custom error message or params object
+</ParamField>
+
+#### `.length()`
+
+Enforces exact string length.
+
+```typescript
+const schema = z.string().length(5);
+schema.parse("hello"); // "hello"
+schema.parse("hi"); // throws
+```
+
+<ParamField path="len" type="number" required>
+  Exact length required
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckLengthEqualsParams" optional>
+  Custom error message or params object
+</ParamField>
+
+#### `.nonempty()`
+
+Requires at least one character. Equivalent to `.min(1)`.
+
+```typescript
+const schema = z.string().nonempty();
+schema.parse("hello"); // "hello"
+schema.parse(""); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckMinLengthParams" optional>
+  Custom error message
+</ParamField>
+
+### Content Validations
+
+#### `.regex()`
+
+Validates string against a regular expression.
+
+```typescript
+const schema = z.string().regex(/^[0-9]+$/);
+schema.parse("12345"); // "12345"
+schema.parse("hello"); // throws
+```
+
+<ParamField path="regex" type="RegExp" required>
+  Regular expression pattern to match
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckRegexParams" optional>
+  Custom error message or params object
+</ParamField>
+
+#### `.includes()`
+
+Requires string to contain a substring.
+
+```typescript
+const schema = z.string().includes("hello");
+schema.parse("hello world"); // "hello world"
+schema.parse("goodbye"); // throws
+
+// With position
+const schema2 = z.string().includes("world", { position: 6 });
+schema2.parse("hello world"); // "hello world"
+schema2.parse("world hello"); // throws (position < 6)
+```
+
+<ParamField path="value" type="string" required>
+  Substring that must be present
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckIncludesParams" optional>
+  Custom error message or params object with optional `position` property
+</ParamField>
+
+#### `.startsWith()`
+
+Requires string to start with a specific prefix.
+
+```typescript
+const schema = z.string().startsWith("https://");
+schema.parse("https://example.com"); // "https://example.com"
+schema.parse("http://example.com"); // throws
+```
+
+<ParamField path="value" type="string" required>
+  Required prefix
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckStartsWithParams" optional>
+  Custom error message
+</ParamField>
+
+#### `.endsWith()`
+
+Requires string to end with a specific suffix.
+
+```typescript
+const schema = z.string().endsWith(".com");
+schema.parse("example.com"); // "example.com"
+schema.parse("example.org"); // throws
+```
+
+<ParamField path="value" type="string" required>
+  Required suffix
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckEndsWithParams" optional>
+  Custom error message
+</ParamField>
+
+### Case Validations
+
+#### `.lowercase()`
+
+Validates that string contains only lowercase characters.
+
+```typescript
+const schema = z.string().lowercase();
+schema.parse("hello"); // "hello"
+schema.parse("Hello"); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckLowerCaseParams" optional>
+  Custom error message
+</ParamField>
+
+#### `.uppercase()`
+
+Validates that string contains only uppercase characters.
+
+```typescript
+const schema = z.string().uppercase();
+schema.parse("HELLO"); // "HELLO"
+schema.parse("hello"); // throws
+```
+
+<ParamField path="params" type="string | $ZodCheckUpperCaseParams" optional>
+  Custom error message
+</ParamField>
+
+## Transform Methods
+
+Transform methods modify the string value during parsing.
+
+#### `.trim()`
+
+Removes whitespace from both ends.
+
+```typescript
+const schema = z.string().trim();
+schema.parse("  hello  "); // "hello"
+```
+
+#### `.toLowerCase()`
+
+Converts string to lowercase.
+
+```typescript
+const schema = z.string().toLowerCase();
+schema.parse("HELLO"); // "hello"
+```
+
+#### `.toUpperCase()`
+
+Converts string to uppercase.
+
+```typescript
+const schema = z.string().toUpperCase();
+schema.parse("hello"); // "HELLO"
+```
+
+#### `.normalize()`
+
+Normalizes the string using Unicode normalization.
+
+```typescript
+const schema = z.string().normalize();
+const schema2 = z.string().normalize("NFC");
+```
+
+<ParamField path="form" type="'NFC' | 'NFD' | 'NFKC' | 'NFKD' | (string & {})" optional>
+  Unicode normalization form (default: "NFC")
+</ParamField>
+
+#### `.slugify()`
+
+Converts string to URL-friendly slug format.
+
+```typescript
+const schema = z.string().slugify();
+schema.parse("Hello World!"); // "hello-world"
+```
+
+## Properties
+
+### `.format`
+
+Returns the format string if the schema has a specific format, or `null`.
+
+```typescript
+const schema = z.string().email();
+schema.format; // "email"
+
+const plain = z.string();
+plain.format; // null
+```
+
+### `.minLength`
+
+Returns the minimum length constraint, or `null` if not set.
+
+```typescript
+const schema = z.string().min(5);
+schema.minLength; // 5
+```
+
+### `.maxLength`
+
+Returns the maximum length constraint, or `null` if not set.
+
+```typescript
+const schema = z.string().max(10);
+schema.maxLength; // 10
+```
+
+## Deprecated Format Methods
+
+The following methods are deprecated in favor of standalone format schemas:
+
+- `.email()` - Use `z.email()` instead
+- `.url()` - Use `z.url()` instead
+- `.uuid()` - Use `z.uuid()` instead
+- `.guid()` - Use `z.guid()` instead
+- `.cuid()` - Use `z.cuid()` instead
+- `.cuid2()` - Use `z.cuid2()` instead
+- `.ulid()` - Use `z.ulid()` instead
+- `.nanoid()` - Use `z.nanoid()` instead
+- `.jwt()` - Use `z.jwt()` instead
+- `.base64()` - Use `z.base64()` instead
+- `.base64url()` - Use `z.base64url()` instead
+- `.emoji()` - Use `z.emoji()` instead
+- `.ipv4()` - Use `z.ipv4()` instead
+- `.ipv6()` - Use `z.ipv6()` instead
+- `.datetime()` - Use `z.iso.datetime()` instead
+- `.date()` - Use `z.iso.date()` instead
+- `.time()` - Use `z.iso.time()` instead
+
+## Chaining
+
+All validation and transform methods return `this`, enabling method chaining:
+
+```typescript
+const schema = z.string()
+  .min(5)
+  .max(100)
+  .trim()
+  .toLowerCase()
+  .startsWith("hello");
+```
+
+## See Also
+
+- [String Formats](/api/formats/email) - Specialized string format schemas
+- [Transforms](/api/transforms) - General transformation methods
+- [Custom Validations](/api/refinements) - Using `.refine()` for custom logic

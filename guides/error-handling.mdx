@@ -1,0 +1,307 @@
+---
+title: Error Handling
+description: Understanding ZodError structure, error formatting, and custom messages
+---
+
+## ZodError Structure
+
+When validation fails, Zod throws a `ZodError` that contains detailed information about all validation issues.
+
+### Basic Error Structure
+
+```typescript
+import * as z from 'zod';
+
+const schema = z.object({
+  f1: z.number(),
+  f3: z.string().nullable(),
+  f4: z.array(z.object({ t: z.union([z.string(), z.boolean()]) }))
+});
+
+const result = schema.safeParse({});
+
+if (!result.success) {
+  console.log(result.error);
+  // ZodError with issues array
+}
+```
+
+The `ZodError` object contains:
+
+- `issues`: Array of `$ZodIssue` objects describing each validation failure
+- `message`: JSON stringified representation of all issues
+- `name`: Always `"ZodError"`
+
+### Issue Types
+
+Zod provides different issue types for various validation failures:
+
+#### Invalid Type Issue
+
+```typescript
+interface $ZodIssueInvalidType {
+  readonly code: "invalid_type";
+  readonly expected: "string" | "number" | "boolean" | "array" | "object" | ...;
+  readonly input?: unknown;
+  readonly path: PropertyKey[];
+  readonly message: string;
+}
+```
+
+Example:
+
+```typescript
+const result = z.string().safeParse(234);
+// {
+//   "expected": "string",
+//   "code": "invalid_type",
+//   "path": [],
+//   "message": "Invalid input: expected string, received number"
+// }
+```
+
+#### Too Small/Too Big Issues
+
+```typescript
+const result = z.array(z.string()).min(3).safeParse(["asdf", "qwer"]);
+
+if (!result.success) {
+  console.log(result.error.issues[0]);
+  // {
+  //   "origin": "array",
+  //   "code": "too_small",
+  //   "minimum": 3,
+  //   "inclusive": true,
+  //   "path": [],
+  //   "message": "Too small: expected array to have >=3 items"
+  // }
+}
+```
+
+#### Invalid Format Issue
+
+```typescript
+const schema = z.string().email();
+const result = schema.safeParse("asdfsdf");
+
+// Issue: { code: "invalid_format", format: "email", ... }
+```
+
+#### Custom Issue
+
+```typescript
+const schema = z.number().refine((val) => val > 3, {
+  message: "override"
+});
+
+const result = schema.safeParse(2);
+// {
+//   "code": "custom",
+//   "path": [],
+//   "message": "override"
+// }
+```
+
+## Error Formatting
+
+Zod provides multiple ways to format errors for different use cases.
+
+### Flattened Errors
+
+The `flatten()` method groups errors into form-level and field-level errors:
+
+```typescript
+const Test = z.object({
+  f1: z.number(),
+  f2: z.string().optional(),
+  f3: z.string().nullable(),
+  f4: z.array(z.object({ t: z.union([z.string(), z.boolean()]) }))
+});
+
+const result = Test.safeParse({});
+const flattened = result.error!.flatten();
+
+console.log(flattened);
+// {
+//   "fieldErrors": {
+//     "f1": ["Invalid input: expected number, received undefined"],
+//     "f3": ["Invalid input: expected string, received undefined"],
+//     "f4": ["Invalid input: expected array, received undefined"]
+//   },
+//   "formErrors": []
+// }
+```
+
+### Custom Flatten Mapper
+
+You can provide a custom mapper function to transform issues:
+
+```typescript
+type ErrorType = { message: string; code: number };
+
+const flattened = result.error!.flatten((iss) => ({
+  message: iss.message,
+  code: 1234
+}));
+
+// Returns ErrorType[] instead of string[]
+```
+
+### Formatted Errors (Tree Structure)
+
+The `format()` method creates a nested tree structure matching your schema:
+
+```typescript
+const schema = z.object({
+  inner: z.object({
+    name: z.string().refine((val) => val.length > 5).array()
+      .refine((val) => val.length <= 1)
+  })
+});
+
+const result = schema.safeParse({
+  inner: { name: ["aasd", "asdfasdfasfd"] }
+});
+
+const formatted = result.error!.format();
+// {
+//   "_errors": [],
+//   "inner": {
+//     "_errors": [],
+//     "name": {
+//       "_errors": ["Invalid input"],
+//       // ... nested errors
+//     }
+//   }
+// }
+```
+
+### Root Level Formatting
+
+```typescript
+const schema = z.string().email();
+const result = schema.safeParse("asdfsdf");
+
+const formatted = result.error!.format();
+// {
+//   "_errors": ["Invalid email address"]
+// }
+```
+
+## Custom Error Messages
+
+### String Parameter
+
+The simplest way to customize error messages:
+
+```typescript
+// For schema constructors
+const schema = z.string("Bad!");
+schema.safeParse(123).error!.issues[0].message; // "Bad!"
+
+// For refinements
+const refined = z.number().refine((x) => x > 3, "override");
+refined.safeParse(2).error!.issues[0].message; // "override"
+
+// For checks
+const minLength = z.string().min(5, "Too short!");
+minLength.safeParse("abc").error!.issues[0].message; // "Too short!"
+```
+
+### Message Object
+
+```typescript
+const schema = z.string().min(10, { message: "override" });
+
+const result = schema.safeParse("tooshort");
+// message: "override"
+```
+
+### Refinement with Custom Path
+
+```typescript
+const schema = z.object({
+  password: z.string(),
+  confirm: z.string()
+}).refine((val) => val.confirm === val.password, {
+  path: ["confirm"],
+  message: "Passwords don't match"
+});
+
+const result = schema.safeParse({
+  password: "peanuts",
+  confirm: "qeanuts"
+});
+
+const error = result.error!.format();
+// error.confirm._errors = ["Passwords don't match"]
+```
+
+### Refinement with Params
+
+```typescript
+const schema = z.number().refine((val) => val >= 3, {
+  params: { minimum: 3 }
+});
+
+const result = schema.safeParse(2);
+// {
+//   "code": "custom",
+//   "path": [],
+//   "params": { "minimum": 3 },
+//   "message": "Invalid input"
+// }
+```
+
+<Note>
+Use `params` to pass additional metadata to error maps for dynamic message generation.
+</Note>
+
+## Error Utilities
+
+### Adding Issues
+
+```typescript
+const err = new z.ZodError([]);
+
+err.addIssue({
+  code: "invalid_type",
+  expected: "object",
+  path: [],
+  message: "Expected object",
+  input: "adf"
+});
+
+// Or add multiple issues
+err.addIssues([issue1, issue2]);
+```
+
+### Checking Empty Errors
+
+```typescript
+if (err.isEmpty) {
+  // No validation errors
+}
+```
+
+<Warning>
+Don't call `.parse()` on schemas with async refinements. It will throw an error. Use `.parseAsync()` instead.
+</Warning>
+
+## TypeScript Type Inference
+
+```typescript
+type FormattedError = z.inferFormattedError<typeof schema>;
+type FlattenedError = z.inferFlattenedErrors<typeof schema>;
+
+// With custom mapper
+type CustomFormatted = z.inferFormattedError<typeof schema, number>;
+```
+
+## Best Practices
+
+1. **Use `safeParse` in production** - Returns a result object instead of throwing
+2. **Flatten for forms** - Use `.flatten()` for form validation to map errors to fields
+3. **Format for nested data** - Use `.format()` for complex nested objects
+4. **Add context with params** - Include `params` in refinements for dynamic error messages
+5. **Set custom paths** - Use the `path` option in refinements to target specific fields

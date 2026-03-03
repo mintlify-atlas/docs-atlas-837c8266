@@ -1,0 +1,346 @@
+---
+title: 'z.union()'
+description: 'Define schemas that accept one of several alternative types'
+---
+
+## Basic Usage
+
+Create a schema that accepts any one of the provided options.
+
+```typescript
+import { z } from 'zod';
+
+const StringOrNumber = z.union([z.string(), z.number()]);
+
+StringOrNumber.parse('hello');  // ✓ Valid
+StringOrNumber.parse(42);       // ✓ Valid
+StringOrNumber.parse(true);     // ✗ Invalid
+
+type StringOrNumber = z.infer<typeof StringOrNumber>;
+// string | number
+```
+
+## Signature
+
+```typescript
+function union<T extends readonly [SomeType, ...SomeType[]]>(
+  options: T,
+  params?: string | ZodUnionParams
+): ZodUnion<T>
+```
+
+<ParamField path="options" type="ZodType[]" required>
+  Array of schemas. Must contain at least two options. Input must match at least one.
+</ParamField>
+
+<ParamField path="params" type="string | ZodUnionParams">
+  Optional error message (string) or configuration object.
+</ParamField>
+
+## Properties
+
+<ParamField path="options" type="readonly ZodType[]">
+  Access the union's option schemas.
+  
+  ```typescript
+  const schema = z.union([z.string(), z.number()]);
+  schema.options; // [ZodString, ZodNumber]
+  ```
+</ParamField>
+
+## Convenience Method
+
+Use the `.or()` method as shorthand for unions:
+
+```typescript
+const StringOrNumber = z.string().or(z.number());
+// Equivalent to: z.union([z.string(), z.number()])
+
+type StringOrNumber = z.infer<typeof StringOrNumber>;
+// string | number
+```
+
+## Multiple Options
+
+Unions can have more than two options:
+
+```typescript
+const Status = z.union([
+  z.literal('pending'),
+  z.literal('approved'),
+  z.literal('rejected'),
+  z.literal('cancelled'),
+]);
+
+type Status = z.infer<typeof Status>;
+// "pending" | "approved" | "rejected" | "cancelled"
+
+// Better approach: use z.enum()
+const BetterStatus = z.enum(['pending', 'approved', 'rejected', 'cancelled']);
+```
+
+<Note>
+For literal unions, prefer `z.enum()` or `z.literal([...])` for better error messages.
+</Note>
+
+## Complex Types
+
+### Object Unions
+
+```typescript
+const Result = z.union([
+  z.object({
+    success: z.literal(true),
+    data: z.string(),
+  }),
+  z.object({
+    success: z.literal(false),
+    error: z.string(),
+  }),
+]);
+
+type Result = z.infer<typeof Result>;
+// | { success: true; data: string }
+// | { success: false; error: string }
+
+const success = Result.parse({ success: true, data: 'Hello' });
+const failure = Result.parse({ success: false, error: 'Failed' });
+```
+
+<Tip>
+For object unions with a discriminator field, use [`z.discriminatedUnion()`](/api/complex/discriminated-union) for better performance and error messages.
+</Tip>
+
+### Nested Unions
+
+```typescript
+const Nested = z.union([
+  z.string(),
+  z.union([
+    z.number(),
+    z.boolean(),
+  ]),
+]);
+
+type Nested = z.infer<typeof Nested>;
+// string | number | boolean
+```
+
+### Array Unions
+
+```typescript
+const MixedArray = z.union([
+  z.array(z.string()),
+  z.array(z.number()),
+]);
+
+type MixedArray = z.infer<typeof MixedArray>;
+// string[] | number[]
+
+MixedArray.parse(['a', 'b', 'c']); // ✓ Valid
+MixedArray.parse([1, 2, 3]);       // ✓ Valid
+MixedArray.parse(['a', 1]);        // ✗ Invalid - mixed types
+```
+
+## Nullable and Optional
+
+### Nullable Types
+
+```typescript
+const NullableString = z.union([z.string(), z.null()]);
+// Equivalent to: z.string().nullable()
+
+type NullableString = z.infer<typeof NullableString>;
+// string | null
+```
+
+### Optional Types
+
+```typescript
+const OptionalString = z.union([z.string(), z.undefined()]);
+// Equivalent to: z.string().optional()
+
+type OptionalString = z.infer<typeof OptionalString>;
+// string | undefined
+```
+
+### Nullish Types
+
+```typescript
+const NullishString = z.union([z.string(), z.null(), z.undefined()]);
+// Equivalent to: z.string().nullish()
+
+type NullishString = z.infer<typeof NullishString>;
+// string | null | undefined
+```
+
+## Type Inference
+
+```typescript
+const schema = z.union([
+  z.string(),
+  z.number(),
+  z.object({ type: z.literal('custom'), value: z.unknown() }),
+]);
+
+type Output = z.infer<typeof schema>;
+// string | number | { type: "custom"; value: unknown }
+
+type Input = z.input<typeof schema>;
+// Same as output for unions without transformations
+```
+
+## Parsing Behavior
+
+Zod tries each option in order until one succeeds:
+
+```typescript
+const schema = z.union([
+  z.string().email(),
+  z.string().url(),
+  z.string(),
+]);
+
+schema.parse('test@example.com'); // Matches first option (email)
+schema.parse('https://example.com'); // Matches second option (url)
+schema.parse('hello'); // Matches third option (string)
+```
+
+<Warning>
+Order matters! Place more specific schemas before more general ones.
+</Warning>
+
+```typescript
+// Bad: General schema first
+const bad = z.union([
+  z.string(),        // Matches everything
+  z.string().email(), // Never reached
+]);
+
+// Good: Specific schemas first
+const good = z.union([
+  z.string().email(),
+  z.string(),
+]);
+```
+
+## Error Messages
+
+When all options fail, Zod reports all validation errors:
+
+```typescript
+const schema = z.union([
+  z.string().min(10),
+  z.number().positive(),
+]);
+
+try {
+  schema.parse('short');
+} catch (error) {
+  console.log(error.errors);
+  // Reports:
+  // - String too short (from first option)
+  // - Invalid type: expected number (from second option)
+}
+```
+
+Customize the error message:
+
+```typescript
+const schema = z.union(
+  [z.string(), z.number()],
+  'Value must be a string or number'
+);
+```
+
+## Common Patterns
+
+### API Response Types
+
+```typescript
+const ApiResponse = z.union([
+  z.object({
+    status: z.literal('success'),
+    data: z.unknown(),
+  }),
+  z.object({
+    status: z.literal('error'),
+    message: z.string(),
+    code: z.number(),
+  }),
+]);
+
+type ApiResponse = z.infer<typeof ApiResponse>;
+```
+
+### Configuration Options
+
+```typescript
+const Config = z.union([
+  z.object({
+    type: z.literal('local'),
+    path: z.string(),
+  }),
+  z.object({
+    type: z.literal('remote'),
+    url: z.string().url(),
+    apiKey: z.string(),
+  }),
+]);
+
+type Config = z.infer<typeof Config>;
+```
+
+### ID Types
+
+```typescript
+const ID = z.union([
+  z.string().uuid(),
+  z.number().int().positive(),
+]);
+
+type ID = z.infer<typeof ID>;
+// string (uuid) | number
+```
+
+## XOR (Exclusive Union)
+
+For exclusive unions where exactly one option must match:
+
+```typescript
+import { z } from 'zod';
+
+const ExactlyOne = z.xor([
+  z.object({ a: z.string() }),
+  z.object({ b: z.number() }),
+]);
+
+ExactlyOne.parse({ a: 'hello' }); // ✓ Valid - matches first
+ExactlyOne.parse({ b: 42 });      // ✓ Valid - matches second
+ExactlyOne.parse({ a: 'hello', b: 42 }); // ✗ Invalid - matches both
+ExactlyOne.parse({});              // ✗ Invalid - matches neither
+```
+
+## Transformations
+
+Transform union values:
+
+```typescript
+const Normalized = z.union([
+  z.string(),
+  z.number().transform(String),
+]).transform((val) => val.toUpperCase());
+
+Normalized.parse('hello'); // "HELLO"
+Normalized.parse(42);      // "42" (number converted to string, then uppercased)
+
+type Normalized = z.infer<typeof Normalized>;
+// string
+```
+
+## Related
+
+- [z.discriminatedUnion()](/api/complex/discriminated-union) - For tagged unions (better performance)
+- [z.intersection()](/api/complex/intersection) - For combining schemas (AND logic)
+- [z.enum()](/api/primitives/enum) - For string literal unions
+- [z.xor()](/api/complex/xor) - For exclusive unions (exactly one match)

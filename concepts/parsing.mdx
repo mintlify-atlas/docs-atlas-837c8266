@@ -1,0 +1,419 @@
+---
+title: Parsing
+description: Parse and validate data at runtime using parse(), safeParse(), and async variants
+---
+
+## Overview
+
+Parsing is the process of validating data against a schema. Zod provides multiple methods for parsing, each suited to different use cases:
+
+- **`parse()`** - Throws on validation failure
+- **`safeParse()`** - Returns result object
+- **`parseAsync()`** - Async version that throws
+- **`safeParseAsync()`** - Async version that returns result
+
+## parse()
+
+The `parse()` method validates data and returns it if valid, otherwise throws a `ZodError`:
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.string();
+
+// Valid data - returns the value
+const result = schema.parse('hello'); // 'hello'
+
+// Invalid data - throws ZodError
+try {
+  schema.parse(123);
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    console.log(error.issues);
+  }
+}
+```
+
+<Note>
+From `packages/zod/src/v4/classic/schemas.ts:195`, `parse()` is defined as:
+```typescript
+parse(data: unknown, params?: ParseContext): Output
+```
+</Note>
+
+### When to Use parse()
+
+<Steps>
+
+### Server-Side Validation
+
+When you want validation errors to crash the request:
+
+```typescript
+app.post('/users', (req, res) => {
+  const userData = UserSchema.parse(req.body);
+  // If we reach here, data is valid
+  const user = await createUser(userData);
+  res.json(user);
+});
+```
+
+### Type Assertions
+
+When you're confident data is valid:
+
+```typescript
+const config = ConfigSchema.parse(process.env);
+// TypeScript knows config matches the schema
+```
+
+</Steps>
+
+## safeParse()
+
+The `safeParse()` method never throws. Instead, it returns a result object:
+
+```typescript
+const schema = z.number();
+
+const result = schema.safeParse('not a number');
+
+if (result.success) {
+  // Success case
+  console.log(result.data); // Typed as number
+} else {
+  // Error case
+  console.log(result.error); // ZodError instance
+}
+```
+
+### Result Type
+
+From `packages/zod/src/v4/classic/parse.ts:4-6`:
+
+```typescript
+type ZodSafeParseResult<T> = ZodSafeParseSuccess<T> | ZodSafeParseError<T>;
+type ZodSafeParseSuccess<T> = { success: true; data: T; error?: never };
+type ZodSafeParseError<T> = { success: false; data?: never; error: ZodError<T> };
+```
+
+### When to Use safeParse()
+
+```typescript
+// User input validation
+function validateUserInput(input: unknown) {
+  const result = UserSchema.safeParse(input);
+  
+  if (!result.success) {
+    return {
+      errors: result.error.issues.map(issue => ({
+        path: issue.path,
+        message: issue.message,
+      })),
+    };
+  }
+  
+  return { user: result.data };
+}
+
+// API responses
+const apiResult = await fetch('/api/data');
+const json = await apiResult.json();
+const parsed = ApiResponseSchema.safeParse(json);
+
+if (parsed.success) {
+  // Handle valid response
+  processData(parsed.data);
+} else {
+  // Handle invalid response
+  logError('API returned invalid data', parsed.error);
+}
+```
+
+## parseAsync()
+
+Use `parseAsync()` when schemas contain asynchronous validations (like `.refine()` with async functions):
+
+```typescript
+const schema = z.string().refine(
+  async (email) => {
+    // Simulate async check (e.g., database lookup)
+    const exists = await checkEmailExists(email);
+    return !exists;
+  },
+  { message: 'Email already exists' }
+);
+
+// Must use parseAsync for async refinements
+try {
+  const email = await schema.parseAsync('test@example.com');
+  console.log('Valid email:', email);
+} catch (error) {
+  console.error('Validation failed:', error);
+}
+```
+
+<Warning>
+Calling `parse()` on a schema with async refinements will throw an error. Always use `parseAsync()` for async validation.
+</Warning>
+
+### Async Transformations
+
+```typescript
+const schema = z.number().transform(async (n) => {
+  // Async transformation
+  const result = await fetch(`/api/multiply?n=${n}`);
+  return result.json();
+});
+
+const data = await z.object({ id: schema }).parseAsync({ id: 5 });
+// data.id is the transformed result
+```
+
+## safeParseAsync()
+
+Combines the safety of `safeParse()` with async support:
+
+```typescript
+const schema = z.string().refine(
+  async (val) => {
+    const isValid = await validateWithExternalAPI(val);
+    return isValid;
+  },
+  'External validation failed'
+);
+
+const result = await schema.safeParseAsync('test-value');
+
+if (result.success) {
+  console.log('Valid:', result.data);
+} else {
+  console.error('Invalid:', result.error.issues);
+}
+```
+
+### Real-World Example
+
+```typescript
+const RegistrationSchema = z.object({
+  username: z.string().min(3).refine(
+    async (username) => {
+      const exists = await db.users.findOne({ username });
+      return !exists;
+    },
+    { message: 'Username already taken' }
+  ),
+  email: z.string().email().refine(
+    async (email) => {
+      const exists = await db.users.findOne({ email });
+      return !exists;
+    },
+    { message: 'Email already registered' }
+  ),
+  password: z.string().min(8),
+});
+
+// In your route handler
+app.post('/register', async (req, res) => {
+  const result = await RegistrationSchema.safeParseAsync(req.body);
+  
+  if (!result.success) {
+    return res.status(400).json({
+      errors: result.error.issues,
+    });
+  }
+  
+  const user = await createUser(result.data);
+  res.json({ user });
+});
+```
+
+## Parse Context
+
+All parse methods accept an optional context parameter for customization:
+
+```typescript
+const schema = z.string();
+
+// Custom error messages
+schema.parse('test', {
+  error: (issues) => {
+    return issues.map(issue => ({
+      ...issue,
+      message: `Custom: ${issue.message}`,
+    }));
+  },
+});
+
+// Include input in errors
+schema.safeParse('test', {
+  reportInput: true,
+});
+
+// Disable JIT optimization
+schema.parse('test', {
+  jitless: true,
+});
+```
+
+From `packages/zod/src/v4/core/schemas.ts:16-25`, the `ParseContext` interface:
+
+```typescript
+interface ParseContext<T extends $ZodIssueBase = never> {
+  /** Customize error messages. */
+  readonly error?: $ZodErrorMap<T>;
+  /** Include the `input` field in issue objects. Default `false`. */
+  readonly reportInput?: boolean;
+  /** Skip eval-based fast path. Default `false`. */
+  readonly jitless?: boolean;
+}
+```
+
+## Error Handling Patterns
+
+### Pattern 1: Try-Catch with parse()
+
+```typescript
+try {
+  const data = schema.parse(untrustedInput);
+  processData(data);
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    handleValidationError(error);
+  } else {
+    throw error; // Re-throw unexpected errors
+  }
+}
+```
+
+### Pattern 2: Conditional with safeParse()
+
+```typescript
+const result = schema.safeParse(untrustedInput);
+
+if (result.success) {
+  processData(result.data);
+} else {
+  handleValidationError(result.error);
+}
+```
+
+### Pattern 3: Early Return
+
+```typescript
+function processRequest(data: unknown) {
+  const parsed = RequestSchema.safeParse(data);
+  if (!parsed.success) {
+    return { error: parsed.error };
+  }
+  
+  // TypeScript knows parsed.data is valid
+  return handleValidRequest(parsed.data);
+}
+```
+
+## Practical Examples
+
+### Form Validation
+
+```typescript
+const FormSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  confirmPassword: z.string(),
+}).refine(
+  (data) => data.password === data.confirmPassword,
+  {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  }
+);
+
+function handleSubmit(formData: FormData) {
+  const result = FormSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+    confirmPassword: formData.get('confirmPassword'),
+  });
+  
+  if (!result.success) {
+    displayErrors(result.error.flatten());
+    return;
+  }
+  
+  submitForm(result.data);
+}
+```
+
+### Environment Variables
+
+```typescript
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']),
+  PORT: z.string().transform(Number).pipe(z.number().int().positive()),
+  DATABASE_URL: z.string().url(),
+  API_KEY: z.string().min(1),
+});
+
+// Validate on startup
+const env = EnvSchema.parse(process.env);
+export default env;
+```
+
+### API Request Validation
+
+```typescript
+const CreateUserRequest = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  age: z.number().int().positive().optional(),
+});
+
+app.post('/users', async (req, res) => {
+  const result = CreateUserRequest.safeParse(req.body);
+  
+  if (!result.success) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      issues: result.error.issues,
+    });
+  }
+  
+  const user = await createUser(result.data);
+  res.json(user);
+});
+```
+
+## Performance Considerations
+
+<Note>
+Zod uses JIT (Just-In-Time) compilation for performance. The first parse is slower as it compiles the validator, but subsequent parses are much faster.
+</Note>
+
+```typescript
+// First parse - compiles validator
+const result1 = schema.parse(data); // ~1ms
+
+// Subsequent parses - uses compiled validator
+const result2 = schema.parse(data); // ~0.1ms
+```
+
+Disable JIT for debugging:
+
+```typescript
+schema.parse(data, { jitless: true });
+```
+
+## Best Practices
+
+1. **Use `safeParse()` for user input** - Never trust external data
+2. **Use `parse()` for internal assertions** - When data should always be valid
+3. **Use async methods only when needed** - Synchronous parsing is faster
+4. **Handle errors gracefully** - Provide clear error messages to users
+5. **Validate early** - Check data at system boundaries
+
+## Next Steps
+
+- Learn about [Type Inference](/concepts/type-inference) to extract TypeScript types
+- Explore [Refinements](/concepts/refinements) for custom validation
+- Master [Transformations](/concepts/transformations) to modify data during parsing

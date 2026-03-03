@@ -1,0 +1,645 @@
+---
+title: Zod v4 Changelog
+description: Complete changelog and migration guide for upgrading from Zod 3 to Zod 4
+---
+
+This migration guide lists the breaking changes in Zod 4 in order of highest to lowest impact. To learn more about the performance enhancements and new features of Zod 4, read the introductory post.
+
+## Installation
+
+To upgrade to Zod 4:
+
+```bash
+npm install zod@^4.0.0
+```
+
+Many of Zod's behaviors and APIs have been made more intuitive and cohesive. The breaking changes described in this document often represent major quality-of-life improvements for Zod users. I strongly recommend reading this guide thoroughly.
+
+<Note>
+**Note** — Zod 3 exported a number of undocumented quasi-internal utility types and functions that are not considered part of the public API. Changes to those are not documented here.
+</Note>
+
+<Note>
+**Unofficial codemod** — A community-maintained codemod [`zod-v3-to-v4`](https://github.com/nicoespeon/zod-v3-to-v4) is available.
+</Note>
+
+## Breaking Changes
+
+
+<Accordion title="Error Customization">
+
+Zod 4 standardizes the APIs for error customization under a single, unified `error` param. Previously Zod's error customization APIs were fragmented and inconsistent.
+
+### Deprecates `message` parameter
+
+Replaces `message` param with `error`. The old `message` parameter is still supported but deprecated.
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+z.string().min(5, { error: "Too short." });
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+z.string().min(5, { message: "Too short." });
+```
+</Tab>
+</Tabs>
+
+### Drops `invalid_type_error` and `required_error`
+
+The `invalid_type_error` / `required_error` params have been dropped. These can now be cleanly represented with the new `error` parameter.
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+z.string({ 
+  error: (issue) => issue.input === undefined 
+    ? "This field is required" 
+    : "Not a string" 
+});
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+z.string({ 
+  required_error: "This field is required",
+  invalid_type_error: "Not a string", 
+});
+```
+</Tab>
+</Tabs>
+
+### Drops `errorMap`
+
+This is renamed to `error`. Error maps can also now return a plain `string` (instead of `{message: string}`). They can also return `undefined`, which tells Zod to yield control to the next error map in the chain.
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+z.string().min(5, {
+  error: (issue) => {
+    if (issue.code === "too_small") {
+      return `Value must be >${issue.minimum}`
+    }
+  },
+});
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+z.string({
+  errorMap: (issue, ctx) => {
+    if (issue.code === "too_small") {
+      return { message: `Value must be >${issue.minimum}` };
+    }
+    return { message: ctx.defaultError };
+  },
+});
+```
+</Tab>
+</Tabs>
+
+</Accordion>
+
+<Accordion title="ZodError Changes">
+
+### Updates issue formats
+
+The issue formats have been dramatically streamlined.
+
+```ts
+import * as z from "zod"; // v4
+
+type IssueFormats = 
+  | z.core.$ZodIssueInvalidType
+  | z.core.$ZodIssueTooBig
+  | z.core.$ZodIssueTooSmall
+  | z.core.$ZodIssueInvalidStringFormat
+  | z.core.$ZodIssueNotMultipleOf
+  | z.core.$ZodIssueUnrecognizedKeys
+  | z.core.$ZodIssueInvalidValue
+  | z.core.$ZodIssueInvalidUnion
+  | z.core.$ZodIssueInvalidKey // new: used for z.record/z.map 
+  | z.core.$ZodIssueInvalidElement // new: used for z.map/z.set
+  | z.core.$ZodIssueCustom;
+```
+
+### Changes error map precedence
+
+<Warning>
+The error map precedence has been changed to be more consistent. An error map passed into `.parse()` no longer takes precedence over a schema-level error map.
+</Warning>
+
+```ts
+const mySchema = z.string({ error: () => "Schema-level error" });
+
+// in Zod 3
+mySchema.parse(12, { error: () => "Contextual error" }); // => "Contextual error"
+
+// in Zod 4
+mySchema.parse(12, { error: () => "Contextual error" }); // => "Schema-level error"
+```
+
+### Deprecates `.format()` and `.flatten()`
+
+The `.format()` and `.flatten()` methods on `ZodError` have been deprecated. Instead use the top-level `z.treeifyError()` function.
+
+### Deprecates `.addIssue()` and `.addIssues()`
+
+Directly push to `err.issues` array instead:
+
+```ts
+myError.issues.push({ 
+  // new issue
+});
+```
+
+</Accordion>
+
+<Accordion title="Number Validations">
+
+### No infinite values
+
+<Warning>
+`POSITIVE_INFINITY` and `NEGATIVE_INFINITY` are no longer considered valid values for `z.number()`.
+</Warning>
+
+### `.safe()` no longer accepts floats
+
+In Zod 4, `z.number().safe()` is deprecated. It now behaves identically to `.int()`, meaning it no longer accepts floats.
+
+### `.int()` accepts safe integers only
+
+The `z.number().int()` API no longer accepts unsafe integers (outside the range of `Number.MIN_SAFE_INTEGER` and `Number.MAX_SAFE_INTEGER`).
+
+</Accordion>
+
+<Accordion title="String Validations">
+
+### Deprecates `.email()` etc
+
+String formats are now represented as subclasses of `ZodString`. These APIs have been moved to the top-level `z` namespace.
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+z.email();
+z.uuid();
+z.url();
+z.emoji();
+z.base64();
+z.base64url();
+z.nanoid();
+z.cuid();
+z.cuid2();
+z.ulid();
+z.ipv4();
+z.ipv6();
+z.cidrv4();
+z.cidrv6();
+z.iso.date();
+z.iso.time();
+z.iso.datetime();
+z.iso.duration();
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+z.string().email();
+z.string().uuid();
+z.string().url();
+z.string().emoji();
+// etc.
+```
+</Tab>
+</Tabs>
+
+### Stricter `.uuid()`
+
+The `z.uuid()` now validates UUIDs more strictly against the RFC 9562/4122 specification. For a more permissive validator, use `z.guid()`.
+
+```ts
+z.uuid(); // RFC 9562/4122 compliant UUID
+z.guid(); // any 8-4-4-4-12 hex pattern
+```
+
+### Drops `z.string().ip()` and `z.string().cidr()`
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+z.ipv4(); // IPv4 addresses
+z.ipv6(); // IPv6 addresses
+z.cidrv4(); // IPv4 CIDR ranges
+z.cidrv6(); // IPv6 CIDR ranges
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+z.string().ip();
+z.string().cidr();
+```
+</Tab>
+</Tabs>
+
+</Accordion>
+
+<Accordion title="Coercion Changes">
+
+The input type of all `z.coerce` schemas is now `unknown`.
+
+```ts
+const schema = z.coerce.string();
+type schemaInput = z.input<typeof schema>;
+
+// Zod 3: string;
+// Zod 4: unknown;
+```
+
+</Accordion>
+
+<Accordion title="Default Values">
+
+### `.default()` updates
+
+<Warning>
+The application of `.default()` has changed. If the input is `undefined`, `ZodDefault` short-circuits and returns the default value. The default value must be assignable to the output type.
+</Warning>
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+const schema = z.string()
+  .transform(val => val.length)
+  .default(0); // must be a number
+  
+schema.parse(undefined); // => 0
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+const schema = z.string()
+  .transform(val => val.length)
+  .default("tuna"); // must be a string
+  
+schema.parse(undefined); // => 4
+```
+</Tab>
+</Tabs>
+
+### New `.prefault()` API
+
+To replicate the old behavior, use the new `.prefault()` API ("pre-parse default"):
+
+```ts
+const schema = z.string()
+  .transform(val => val.length)
+  .prefault("tuna");
+  
+schema.parse(undefined); // => 4
+```
+
+</Accordion>
+
+<Accordion title="Object Schema Changes">
+
+### Defaults applied within optional fields
+
+<Warning>
+Defaults inside properties are applied, even within optional fields. This may cause breakage in code paths that rely on key existence.
+</Warning>
+
+```ts
+const schema = z.object({
+  a: z.string().default("tuna").optional(),
+});
+
+schema.parse({});
+// Zod 4: { a: "tuna" }
+// Zod 3: {}
+```
+
+### Deprecates `.strict()` and `.passthrough()`
+
+Use the top-level `z.strictObject()` and `z.looseObject()` functions instead:
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+z.strictObject({ name: z.string() });
+z.looseObject({ name: z.string() });
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+z.object({ name: z.string() }).strict();
+z.object({ name: z.string() }).passthrough();
+```
+</Tab>
+</Tabs>
+
+### Deprecates `.merge()`
+
+The `.merge()` method has been deprecated in favor of `.extend()`:
+
+```ts
+// Deprecated
+const ExtendedSchema = BaseSchema.merge(AdditionalSchema);
+
+// Recommended
+const ExtendedSchema = BaseSchema.extend(AdditionalSchema.shape);
+
+// Best performance
+const ExtendedSchema = z.object({
+  ...BaseSchema.shape,
+  ...AdditionalSchema.shape,
+});
+```
+
+### Drops `.deepPartial()`
+
+This long-deprecated method has been removed with no direct replacement.
+
+### Changes `z.unknown()` optionality
+
+```ts
+const mySchema = z.object({
+  a: z.any(),
+  b: z.unknown()
+});
+// Zod 3: { a?: any; b?: unknown };
+// Zod 4: { a: any; b: unknown };
+```
+
+</Accordion>
+
+<Accordion title="Enum Changes">
+
+### `z.nativeEnum()` deprecated
+
+The `z.nativeEnum()` function is now deprecated. Use `z.enum()` instead, which now supports enum-like inputs:
+
+```ts
+enum Color {
+  Red = "red",
+  Green = "green",
+  Blue = "blue",
+}
+
+const ColorSchema = z.enum(Color); // ✅
+```
+
+### Removes redundant enum APIs
+
+```ts
+ColorSchema.enum.Red; // ✅ => "Red" (canonical API)
+ColorSchema.Enum.Red; // ❌ removed
+ColorSchema.Values.Red; // ❌ removed
+```
+
+</Accordion>
+
+<Accordion title="Array Changes">
+
+### Changes `.nonempty()` type
+
+```ts
+const NonEmpty = z.array(z.string()).nonempty();
+
+type NonEmpty = z.infer<typeof NonEmpty>; 
+// Zod 3: [string, ...string[]]
+// Zod 4: string[]
+```
+
+For the old behavior, use `z.tuple()` with a rest argument:
+
+```ts
+z.tuple([z.string()], z.string());
+// => [string, ...string[]]
+```
+
+</Accordion>
+
+<Accordion title="Function Schema Changes">
+
+### API restructure
+
+<Warning>
+The result of `z.function()` is no longer a Zod schema. It acts as a standalone "function factory" for defining Zod-validated functions.
+</Warning>
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+const myFunction = z.function({
+  input: [z.object({
+    name: z.string(),
+    age: z.number().int(),
+  })],
+  output: z.string(),
+});
+
+myFunction.implement((input) => {
+  return `Hello ${input.name}, you are ${input.age} years old.`;
+});
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+const myFunction = z.function()
+  .args(z.object({
+    name: z.string(),
+    age: z.number().int(),
+  }))
+  .returns(z.string());
+
+myFunction.implement((input) => {
+  return `Hello ${input.name}, you are ${input.age} years old.`;
+});
+```
+</Tab>
+</Tabs>
+
+### Adds `.implementAsync()`
+
+For async functions, use the new `implementAsync()` method:
+
+```ts
+myFunction.implementAsync(async (input) => {
+  return `Hello ${input.name}, you are ${input.age} years old.`;
+});
+```
+
+</Accordion>
+
+<Accordion title="Refinement Changes">
+
+### Ignores type predicates
+
+<Warning>
+Passing a type predicate as a refinement function no longer narrows the type.
+</Warning>
+
+```ts
+const mySchema = z.unknown().refine((val): val is string => {
+  return typeof val === "string"
+});
+
+type MySchema = z.infer<typeof mySchema>; 
+// Zod 3: `string`
+// Zod 4: still `unknown`
+```
+
+### Drops `ctx.path`
+
+The `ctx.path` property is no longer available in refinement functions:
+
+```ts
+z.string().superRefine((val, ctx) => {
+  ctx.path; // ❌ no longer available
+});
+```
+
+### Drops function as second argument
+
+The following overload has been removed:
+
+```ts
+// ❌ No longer supported
+const longString = z.string().refine(
+  (val) => val.length > 10,
+  (val) => ({ message: `${val} is not more than 10 characters` })
+);
+```
+
+</Accordion>
+
+<Accordion title="Record Changes">
+
+### Drops single argument usage
+
+<Tabs>
+<Tab title="Zod 4">
+```ts
+z.record(z.string(), z.string()); // ✅
+```
+</Tab>
+<Tab title="Zod 3">
+```ts
+z.record(z.string()); // Single argument allowed
+```
+</Tab>
+</Tabs>
+
+### Improves enum support
+
+Records with enum keys now ensure exhaustiveness:
+
+```ts
+const myRecord = z.record(z.enum(["a", "b", "c"]), z.number());
+// Zod 4: { a: number; b: number; c: number; }
+// Zod 3: { a?: number; b?: number; c?: number; }
+```
+
+For optional keys, use `z.partialRecord()`:
+
+```ts
+const myRecord = z.partialRecord(z.enum(["a", "b", "c"]), z.number());
+// { a?: number; b?: number; c?: number; }
+```
+
+</Accordion>
+
+<Accordion title="Other Breaking Changes">
+
+### `z.promise()` deprecated
+
+If you have an input that may be a `Promise`, just `await` it before parsing with Zod.
+
+### `z.literal()` drops `symbol` support
+
+Symbols are no longer considered literal values.
+
+### Static `.create()` factories dropped
+
+Previously all Zod classes defined a static `.create()` method. These are now implemented as standalone factory functions.
+
+```ts
+z.ZodString.create(); // ❌ 
+z.string(); // ✅
+```
+
+### `z.intersection()` throws `Error` on merge conflict
+
+<Warning>
+When intersection results are unmergable, Zod now throws a regular `Error` instead of `ZodError`.
+</Warning>
+
+### Drops convenience methods
+
+The undocumented convenience methods `z.ostring()`, `z.onumber()`, etc. have been removed.
+
+</Accordion>
+
+
+## Internal Changes
+
+### Updates generics
+
+The generic structure of `ZodType` has changed:
+
+```ts
+// Zod 3
+class ZodType<Output, Def extends z.ZodTypeDef, Input = Output> {
+  // ...
+}
+
+// Zod 4
+class ZodType<Output = unknown, Input = unknown> {
+  // ...
+}
+```
+
+### Adds `z.core`
+
+Many utility functions and types have been moved to the new `zod/v4/core` sub-package:
+
+```ts
+import * as z from "zod";
+
+function handleError(iss: z.core.$ZodError) {
+  // do stuff
+}
+```
+
+### Moves `._def`
+
+The `._def` property is now moved to `._zod.def`.
+
+### Drops `ZodEffects`
+
+Refinements now live inside schemas themselves as "checks". Transforms have been moved to a dedicated `ZodTransform` class.
+
+### Drops `ZodPreprocess`
+
+The `z.preprocess()` function now returns a `ZodPipe` instance:
+
+```ts
+z.preprocess(val => val, z.string()); // ZodPipe<ZodTransform, ZodString>
+```
+
+### Drops `ZodBranded`
+
+Branding is now handled with a direct modification to the inferred type, instead of a dedicated class.
+
+## Migration Steps
+
+1. **Update dependencies**: Install `zod@^4.0.0`
+2. **Run the codemod**: Consider using [`zod-v3-to-v4`](https://github.com/nicoespeon/zod-v3-to-v4) for automated migration
+3. **Update error handling**: Replace `message`, `invalid_type_error`, `required_error`, and `errorMap` with the unified `error` parameter
+4. **Update string validations**: Replace method calls like `.email()` with top-level functions like `z.email()`
+5. **Update object schemas**: Replace `.merge()` with `.extend()`, and `.strict()`/`.passthrough()` with `z.strictObject()`/`z.looseObject()`
+6. **Update function schemas**: Restructure to use the new `input`/`output` API
+7. **Test thoroughly**: Run your test suite to catch any edge cases

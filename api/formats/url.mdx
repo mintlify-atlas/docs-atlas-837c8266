@@ -1,0 +1,206 @@
+---
+title: URL Validation
+description: Validate URLs with z.url() and z.httpUrl()
+---
+
+## Overview
+
+Zod provides two functions for URL validation:
+
+- `z.url()` - Validates any URL with a protocol
+- `z.httpUrl()` - Validates HTTP/HTTPS URLs specifically
+
+```typescript
+import { z } from "zod";
+
+const urlSchema = z.url();
+const httpUrlSchema = z.httpUrl();
+```
+
+**Location in source:** `~/workspace/source/packages/zod/src/v4/classic/schemas.ts:513-523`
+
+## z.url()
+
+Validates URLs with any protocol scheme.
+
+### Basic Usage
+
+```typescript
+const schema = z.url();
+
+schema.parse("https://example.com"); // ✓ passes
+schema.parse("http://localhost"); // ✓ passes
+schema.parse("ftp://files.example.com"); // ✓ passes
+schema.parse("c:"); // ✓ passes (Windows drive)
+schema.parse("not-a-url"); // ✗ throws
+```
+
+### Valid URL Examples
+
+```typescript
+const schema = z.url();
+
+// Standard URLs
+schema.parse("http://google.com");
+schema.parse("https://google.com");
+
+// With path and query parameters
+schema.parse("https://google.com/asdf?asdf=ljk3lk4&asdf=234#asdf");
+
+// With authentication
+schema.parse("https://anonymous:flabada@developer.mozilla.org/en-US/docs/Web/API/URL/password");
+
+// Localhost
+schema.parse("https://localhost");
+schema.parse("http://localhost");
+
+// Local domains
+schema.parse("https://my.local");
+schema.parse("http://aslkfjdalsdfkjaf");
+
+// Other protocols
+schema.parse("c:"); // Windows drive
+```
+
+### Invalid URL Examples
+
+```typescript
+const schema = z.url();
+
+schema.safeParse("asdf").success; // false
+schema.safeParse("https:/").success; // false
+schema.safeParse("asdfj@lkjsdf.com").success; // false - email is not a URL
+schema.safeParse("https://").success; // false - incomplete
+```
+
+### Custom Error Message
+
+```typescript
+const schema = z.url("Please provide a valid URL");
+
+const result = schema.safeParse("invalid");
+if (!result.success) {
+  console.log(result.error.issues[0].message);
+  // "Please provide a valid URL"
+}
+```
+
+### Parameters
+
+```typescript
+z.url(params?: string | URLParams)
+```
+
+- `string`: Custom error message
+- `URLParams`: Object with:
+  - `message?: string`: Custom error message
+  - `protocol?: RegExp`: Custom protocol validation pattern
+  - `hostname?: RegExp`: Custom hostname validation pattern
+
+## z.httpUrl()
+
+Validates URLs with HTTP or HTTPS protocol specifically.
+
+### Basic Usage
+
+```typescript
+const schema = z.httpUrl();
+
+schema.parse("https://example.com"); // ✓ passes
+schema.parse("http://example.com"); // ✓ passes
+schema.parse("ftp://files.example.com"); // ✗ throws - not HTTP(S)
+```
+
+### Valid Examples
+
+```typescript
+const schema = z.httpUrl();
+
+schema.parse("http://example.com");
+schema.parse("https://example.com");
+schema.parse("https://subdomain.example.com/path?query=value#hash");
+schema.parse("http://localhost:3000");
+```
+
+### Custom Error Message
+
+```typescript
+const schema = z.httpUrl("Must be a valid HTTP or HTTPS URL");
+```
+
+<Note>
+  The URL validator preserves the original input exactly as provided. It does not normalize, encode, or modify the URL string in any way.
+</Note>
+
+## Examples
+
+### API Endpoint Validation
+
+```typescript
+const apiConfigSchema = z.object({
+  baseUrl: z.httpUrl(),
+  timeout: z.number(),
+});
+
+apiConfigSchema.parse({
+  baseUrl: "https://api.example.com",
+  timeout: 5000
+}); // ✓ passes
+```
+
+### Website URL with Additional Constraints
+
+```typescript
+const websiteSchema = z.httpUrl()
+  .refine(
+    (url) => url.startsWith("https://"),
+    "Only HTTPS URLs are allowed"
+  );
+
+websiteSchema.parse("https://example.com"); // ✓ passes
+websiteSchema.parse("http://example.com"); // ✗ throws
+```
+
+### Form Validation
+
+```typescript
+const formSchema = z.object({
+  website: z.url("Please enter a valid URL").optional(),
+  email: z.email("Please enter a valid email"),
+});
+
+const result = formSchema.safeParse({
+  website: "not a url",
+  email: "user@example.com"
+});
+// Returns error for invalid website URL
+```
+
+### URL with Query Parameters
+
+```typescript
+const schema = z.httpUrl();
+
+// Preserves original input including special characters
+const input = "https://example.com?key=NUXOmHqWNVTapJkJJHw8BfD155AuqhH_qju_5fNmQ4ZHV7u8";
+const output = schema.parse(input);
+console.log(output === input); // true - preserved exactly
+```
+
+## Return Type
+
+Returns a `ZodURL` schema that validates and returns strings.
+
+```typescript
+type Output = string;
+type Input = string;
+```
+
+<Warning>
+  The URL validator checks if the string is a valid URL format but does not verify that the URL is accessible or that the domain exists.
+</Warning>
+
+## Related Methods
+
+- [z.string()](/api/primitives/string) - Base string validation
+- [z.email()](/api/formats/email) - Email validation

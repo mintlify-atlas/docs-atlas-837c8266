@@ -1,0 +1,258 @@
+---
+title: z.date()
+description: Date schema type with temporal validations
+---
+
+## Basic Usage
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.date();
+schema.parse(new Date()); // Date object
+schema.parse("2023-01-01"); // throws ZodError
+schema.parse(1234567890); // throws ZodError
+```
+
+## Type Signature
+
+```typescript
+function date(params?: string | $ZodDateParams): ZodDate
+```
+
+<ParamField path="params" type="string | $ZodDateParams" optional>
+  Optional error message (string) or configuration object
+</ParamField>
+
+## Behavior
+
+`z.date()` only accepts JavaScript `Date` objects. It does NOT accept:
+- Timestamps (numbers)
+- Date strings
+- Other date representations
+
+```typescript
+const schema = z.date();
+
+// Valid
+schema.parse(new Date()); // Date
+schema.parse(new Date("2023-01-01")); // Date
+
+// Invalid - throws ZodError
+schema.parse("2023-01-01");
+schema.parse(1234567890);
+schema.parse(Date.now());
+```
+
+## Validation Methods
+
+### `.min()`
+
+Enforces a minimum date/time.
+
+```typescript
+const schema = z.date().min(new Date("2023-01-01"));
+
+schema.parse(new Date("2023-06-01")); // valid
+schema.parse(new Date("2022-01-01")); // throws
+
+// Can also use timestamp
+const schema2 = z.date().min(Date.UTC(2023, 0, 1));
+```
+
+<ParamField path="value" type="number | Date" required>
+  Minimum date (as Date object or timestamp)
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckGreaterThanParams" optional>
+  Custom error message
+</ParamField>
+
+### `.max()`
+
+Enforces a maximum date/time.
+
+```typescript
+const schema = z.date().max(new Date("2023-12-31"));
+
+schema.parse(new Date("2023-06-01")); // valid
+schema.parse(new Date("2024-01-01")); // throws
+
+// Can also use timestamp
+const schema2 = z.date().max(Date.UTC(2023, 11, 31));
+```
+
+<ParamField path="value" type="number | Date" required>
+  Maximum date (as Date object or timestamp)
+</ParamField>
+
+<ParamField path="params" type="string | $ZodCheckLessThanParams" optional>
+  Custom error message
+</ParamField>
+
+## Properties
+
+### `.minDate` (Deprecated)
+
+Returns the minimum date constraint as a Date object, or `null` if not set.
+
+```typescript
+const schema = z.date().min(new Date("2023-01-01"));
+schema.minDate; // Date object for 2023-01-01
+```
+
+<Warning>
+This property is deprecated. Check constraints directly in your code instead.
+</Warning>
+
+### `.maxDate` (Deprecated)
+
+Returns the maximum date constraint as a Date object, or `null` if not set.
+
+```typescript
+const schema = z.date().max(new Date("2023-12-31"));
+schema.maxDate; // Date object for 2023-12-31
+```
+
+<Warning>
+This property is deprecated. Check constraints directly in your code instead.
+</Warning>
+
+## Common Use Cases
+
+### Date Range Validation
+
+```typescript
+const eventDate = z.date()
+  .min(new Date("2024-01-01"))
+  .max(new Date("2024-12-31"));
+```
+
+### Future Dates Only
+
+```typescript
+const futureDate = z.date().min(new Date());
+
+futureDate.parse(new Date(Date.now() + 86400000)); // tomorrow - valid
+futureDate.parse(new Date(Date.now() - 86400000)); // yesterday - throws
+```
+
+### Past Dates Only
+
+```typescript
+const pastDate = z.date().max(new Date());
+
+pastDate.parse(new Date(Date.now() - 86400000)); // yesterday - valid
+pastDate.parse(new Date(Date.now() + 86400000)); // tomorrow - throws
+```
+
+### Birth Date Validation
+
+```typescript
+const birthDate = z.date()
+  .min(new Date("1900-01-01"))
+  .max(new Date()); // not in the future
+```
+
+## Type Coercion
+
+To accept date strings or timestamps and convert them to Date objects:
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.coerce.date();
+
+schema.parse("2023-01-01"); // Date object
+schema.parse(1672531200000); // Date object
+schema.parse(new Date()); // Date object
+```
+
+## Preprocessing
+
+For custom date parsing logic:
+
+```typescript
+import { z } from 'zod';
+
+const dateFromString = z.preprocess(
+  (arg) => {
+    if (typeof arg === "string") {
+      return new Date(arg);
+    }
+    return arg;
+  },
+  z.date()
+);
+
+dateFromString.parse("2023-01-01"); // Date object
+```
+
+## ISO Date Strings
+
+For validating ISO 8601 date strings, use the ISO schemas:
+
+```typescript
+import { z } from 'zod';
+
+// ISO date string (YYYY-MM-DD)
+const isoDate = z.iso.date();
+isoDate.parse("2023-01-01"); // "2023-01-01"
+
+// ISO datetime string
+const isoDateTime = z.iso.datetime();
+isoDateTime.parse("2023-01-01T12:00:00Z"); // valid
+
+// ISO time string
+const isoTime = z.iso.time();
+isoTime.parse("12:00:00"); // "12:00:00"
+```
+
+## Refinements
+
+For complex date logic:
+
+```typescript
+// Only weekdays
+const weekdayDate = z.date().refine(
+  (date) => {
+    const day = date.getDay();
+    return day !== 0 && day !== 6; // not Sunday or Saturday
+  },
+  { message: "Date must be a weekday" }
+);
+
+// Business hours
+const businessHours = z.date().refine(
+  (date) => {
+    const hour = date.getHours();
+    return hour >= 9 && hour < 17;
+  },
+  { message: "Time must be during business hours (9am-5pm)" }
+);
+```
+
+## Chaining
+
+```typescript
+const schema = z.date()
+  .min(new Date("2020-01-01"))
+  .max(new Date("2030-12-31"));
+```
+
+## TypeScript Type
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.date();
+type DateType = z.infer<typeof schema>; // Date
+```
+
+## See Also
+
+- [z.iso.date()](/api/iso/date) - ISO 8601 date strings
+- [z.iso.datetime()](/api/iso/datetime) - ISO 8601 datetime strings
+- [z.iso.time()](/api/iso/time) - ISO 8601 time strings
+- [z.coerce.date()](/api/coercion#date) - Date with type coercion
+- [Refinements](/api/refinements) - Custom validation logic

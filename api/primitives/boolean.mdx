@@ -1,0 +1,133 @@
+---
+title: z.boolean()
+description: Boolean schema type
+---
+
+## Basic Usage
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.boolean();
+schema.parse(true); // true
+schema.parse(false); // false
+schema.parse("true"); // throws ZodError
+schema.parse(1); // throws ZodError
+```
+
+## Type Signature
+
+```typescript
+function boolean(params?: string | $ZodBooleanParams): ZodBoolean
+```
+
+<ParamField path="params" type="string | $ZodBooleanParams" optional>
+  Optional error message (string) or configuration object
+</ParamField>
+
+## Behavior
+
+`z.boolean()` only accepts literal `true` and `false` values. It does NOT perform type coercion:
+
+```typescript
+const schema = z.boolean();
+
+// Valid
+schema.parse(true); // true
+schema.parse(false); // false
+
+// Invalid - throws ZodError
+schema.parse("true");
+schema.parse("false");
+schema.parse(1);
+schema.parse(0);
+schema.parse(null);
+schema.parse(undefined);
+```
+
+## Type Coercion
+
+If you need to accept truthy/falsy values, use coercion:
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.coerce.boolean();
+
+schema.parse(true); // true
+schema.parse(false); // false
+schema.parse("true"); // true
+schema.parse("false"); // false
+schema.parse(1); // true
+schema.parse(0); // false
+schema.parse("yes"); // true
+schema.parse(""); // false
+```
+
+## Usage with Optional
+
+```typescript
+const optionalBoolean = z.boolean().optional();
+
+optionalBoolean.parse(true); // true
+optionalBoolean.parse(false); // false
+optionalBoolean.parse(undefined); // undefined
+```
+
+## Usage with Nullable
+
+```typescript
+const nullableBoolean = z.boolean().nullable();
+
+nullableBoolean.parse(true); // true
+nullableBoolean.parse(false); // false
+nullableBoolean.parse(null); // null
+```
+
+## Default Values
+
+```typescript
+const withDefault = z.boolean().default(false);
+
+withDefault.parse(true); // true
+withDefault.parse(undefined); // false (default applied)
+```
+
+## Custom Error Messages
+
+```typescript
+const schema = z.boolean("Must be a boolean value");
+
+// Or with object syntax
+const schema2 = z.boolean({
+  message: "Must be a boolean value"
+});
+```
+
+## TypeScript Type
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.boolean();
+type BooleanType = z.infer<typeof schema>; // boolean
+```
+
+## Refinements
+
+While uncommon, you can add refinements to boolean schemas:
+
+```typescript
+const mustBeTrue = z.boolean().refine(val => val === true, {
+  message: "Value must be true"
+});
+
+mustBeTrue.parse(true); // true
+mustBeTrue.parse(false); // throws
+```
+
+## See Also
+
+- [z.coerce.boolean()](/api/coercion#boolean) - Boolean with type coercion
+- [Literals](/api/literals) - For accepting specific boolean values
+- [Optional](/api/wrappers/optional) - Making booleans optional

@@ -1,0 +1,302 @@
+---
+title: 'z.tuple()'
+description: 'Define fixed-length array schemas with specific types for each position'
+---
+
+## Basic Usage
+
+Create a tuple schema with a fixed number of elements, each with its own type.
+
+```typescript
+import { z } from 'zod';
+
+const Coordinates = z.tuple([z.number(), z.number()]);
+
+Coordinates.parse([10, 20]);      // ✓ Valid
+Coordinates.parse([10, 20, 30]);  // ✗ Invalid - too many elements
+Coordinates.parse([10, 'twenty']); // ✗ Invalid - wrong type
+
+type Coordinates = z.infer<typeof Coordinates>;
+// [number, number]
+```
+
+## Signature
+
+```typescript
+function tuple<T extends [SomeType, ...SomeType[]]>(
+  items: T,
+  params?: string | ZodTupleParams
+): ZodTuple<T, null>
+
+function tuple<T extends [SomeType, ...SomeType[]], Rest extends SomeType>(
+  items: T,
+  rest: Rest,
+  params?: string | ZodTupleParams
+): ZodTuple<T, Rest>
+
+function tuple(
+  items: [],
+  params?: string | ZodTupleParams
+): ZodTuple<[], null>
+```
+
+<ParamField path="items" type="ZodType[]" required>
+  Array of schemas, one for each tuple element.
+</ParamField>
+
+<ParamField path="rest" type="ZodType">
+  Optional schema for additional elements beyond the fixed items.
+</ParamField>
+
+<ParamField path="params" type="string | ZodTupleParams">
+  Optional error message (string) or configuration object.
+</ParamField>
+
+## Fixed-Length Tuples
+
+Define tuples with a specific number of elements:
+
+```typescript
+// Simple pair
+const Pair = z.tuple([z.string(), z.number()]);
+type Pair = z.infer<typeof Pair>;
+// [string, number]
+
+// Triple with different types
+const Triple = z.tuple([
+  z.string(),
+  z.number(),
+  z.boolean(),
+]);
+type Triple = z.infer<typeof Triple>;
+// [string, number, boolean]
+
+// Complex tuple elements
+const Complex = z.tuple([
+  z.object({ id: z.string() }),
+  z.array(z.number()),
+  z.union([z.string(), z.null()]),
+]);
+type Complex = z.infer<typeof Complex>;
+// [{ id: string }, number[], string | null]
+```
+
+## Variable-Length Tuples
+
+Use the `rest` parameter to allow additional elements:
+
+```typescript
+const AtLeastTwo = z.tuple(
+  [z.string(), z.string()],
+  z.string()
+);
+
+AtLeastTwo.parse(['a', 'b']);           // ✓ Valid
+AtLeastTwo.parse(['a', 'b', 'c']);      // ✓ Valid
+AtLeastTwo.parse(['a', 'b', 'c', 'd']); // ✓ Valid
+AtLeastTwo.parse(['a']);                // ✗ Invalid - too few
+
+type AtLeastTwo = z.infer<typeof AtLeastTwo>;
+// [string, string, ...string[]]
+```
+
+Alternatively, use the `.rest()` method:
+
+```typescript
+const UserWithTags = z.tuple([
+  z.string(), // id
+  z.string(), // name
+]).rest(z.string());
+
+type UserWithTags = z.infer<typeof UserWithTags>;
+// [string, string, ...string[]]
+```
+
+## Methods
+
+### rest()
+
+Define a schema for additional elements beyond the fixed items.
+
+```typescript
+const BaseTuple = z.tuple([z.number(), z.number()]);
+const ExtendedTuple = BaseTuple.rest(z.string());
+
+ExtendedTuple.parse([1, 2]);              // ✓ Valid
+ExtendedTuple.parse([1, 2, 'a', 'b']);    // ✓ Valid
+ExtendedTuple.parse([1, 2, 'a', 3]);      // ✗ Invalid - rest must be strings
+
+type ExtendedTuple = z.infer<typeof ExtendedTuple>;
+// [number, number, ...string[]]
+```
+
+**Signature:**
+
+```typescript
+rest<Rest extends SomeType>(rest: Rest): ZodTuple<T, Rest>
+```
+
+<ParamField path="rest" type="ZodType" required>
+  Schema to validate additional elements against.
+</ParamField>
+
+## Empty Tuples
+
+Create a tuple with no elements:
+
+```typescript
+const Empty = z.tuple([]);
+
+Empty.parse([]);      // ✓ Valid
+Empty.parse([1]);     // ✗ Invalid
+
+type Empty = z.infer<typeof Empty>;
+// []
+```
+
+## Type Inference
+
+```typescript
+const schema = z.tuple([
+  z.string(),
+  z.number(),
+  z.boolean().optional(),
+]);
+
+type Output = z.infer<typeof schema>;
+// [string, number, boolean | undefined]
+
+type Input = z.input<typeof schema>;
+// Same as output for tuples without transformations
+```
+
+## Common Patterns
+
+### Coordinates
+
+```typescript
+const Point2D = z.tuple([z.number(), z.number()]);
+const Point3D = z.tuple([z.number(), z.number(), z.number()]);
+
+type Point2D = z.infer<typeof Point2D>; // [number, number]
+type Point3D = z.infer<typeof Point3D>; // [number, number, number]
+```
+
+### Key-Value Pairs
+
+```typescript
+const Entry = z.tuple([z.string(), z.unknown()]);
+
+type Entry = z.infer<typeof Entry>;
+// [string, unknown]
+
+const entries: Entry[] = [
+  ['name', 'Alice'],
+  ['age', 30],
+  ['active', true],
+];
+```
+
+### Function Returns
+
+```typescript
+const ParseResult = z.tuple([
+  z.boolean(), // success
+  z.string(),  // message
+  z.unknown().optional(), // data
+]);
+
+type ParseResult = z.infer<typeof ParseResult>;
+// [boolean, string, unknown?]
+
+function parse(input: string): ParseResult {
+  try {
+    const data = JSON.parse(input);
+    return [true, 'Success', data];
+  } catch (error) {
+    return [false, 'Parse failed'];
+  }
+}
+```
+
+### CSV Row
+
+```typescript
+const CSVRow = z.tuple([
+  z.string(), // id
+  z.string(), // name
+  z.string().transform(Number), // age
+  z.string().email(), // email
+]);
+
+type CSVRow = z.infer<typeof CSVRow>;
+// [string, string, number, string]
+```
+
+## Refinements
+
+Add custom validation logic:
+
+```typescript
+const Range = z.tuple([z.number(), z.number()])
+  .refine(
+    ([min, max]) => min <= max,
+    'First number must be less than or equal to second'
+  );
+
+Range.parse([1, 10]);  // ✓ Valid
+Range.parse([10, 1]);  // ✗ Invalid - min > max
+```
+
+```typescript
+const RGB = z.tuple([z.number(), z.number(), z.number()])
+  .refine(
+    (values) => values.every(v => v >= 0 && v <= 255),
+    'RGB values must be between 0 and 255'
+  );
+
+RGB.parse([255, 128, 0]); // ✓ Valid
+RGB.parse([256, 0, 0]);   // ✗ Invalid - value out of range
+```
+
+## Transformations
+
+Transform tuple values:
+
+```typescript
+const CoordinateString = z.tuple([z.number(), z.number()])
+  .transform(([x, y]) => `(${x}, ${y})`);
+
+const result = CoordinateString.parse([10, 20]);
+// result: "(10, 20)"
+
+type Result = z.infer<typeof CoordinateString>;
+// string
+```
+
+## Tuple vs Array
+
+| Feature | Tuple | Array |
+|---------|-------|-------|
+| **Length** | Fixed or minimum | Any |
+| **Element Types** | Can vary by position | All same type |
+| **Type Inference** | Precise tuple type | Array type |
+| **Use Case** | Known structure | Unknown length |
+
+```typescript
+// Tuple - fixed structure, different types
+const tuple = z.tuple([z.string(), z.number()]);
+type Tuple = z.infer<typeof tuple>;
+// [string, number]
+
+// Array - variable length, same type
+const array = z.array(z.string());
+type Array = z.infer<typeof array>;
+// string[]
+```
+
+## Related
+
+- [z.array()](/api/complex/array) - For variable-length arrays with uniform types
+- [z.object()](/api/complex/object) - For named properties
+- [z.record()](/api/complex/record) - For dynamic key-value pairs

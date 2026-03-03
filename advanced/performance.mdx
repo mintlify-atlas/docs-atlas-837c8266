@@ -1,0 +1,353 @@
+---
+title: Performance Optimization
+description: Performance tips, best practices, and benchmarks for using Zod efficiently
+---
+
+Zod 4 brings massive performance improvements over Zod 3, but understanding how to use it efficiently can help you get the most out of your validation logic.
+
+## Runtime performance improvements
+
+Zod 4 delivers dramatic performance gains across all schema types:
+
+### String parsing: 14x faster
+
+```sh
+benchmark      time (avg)             (min … max)       p75       p99      p999
+------------------------------------------------- -----------------------------
+• z.string().parse
+------------------------------------------------- -----------------------------
+zod3          363 µs/iter       (338 µs … 683 µs)    351 µs    467 µs    572 µs
+zod4       24'674 ns/iter    (21'083 ns … 235 µs) 24'209 ns 76'125 ns    120 µs
+
+summary for z.string().parse
+  zod4
+   14.71x faster than zod3
+```
+
+### Array parsing: 7x faster
+
+```sh
+benchmark      time (avg)             (min … max)       p75       p99      p999
+------------------------------------------------- -----------------------------
+• z.array() parsing
+------------------------------------------------- -----------------------------
+zod3          147 µs/iter       (137 µs … 767 µs)    140 µs    246 µs    520 µs
+zod4       19'817 ns/iter    (18'125 ns … 436 µs) 19'125 ns 44'500 ns    137 µs
+
+summary for z.array() parsing
+  zod4
+   7.43x faster than zod3
+```
+
+### Object parsing: 6.5x faster
+
+```sh
+benchmark      time (avg)             (min … max)       p75       p99      p999
+------------------------------------------------- -----------------------------
+• z.object() safeParse
+------------------------------------------------- -----------------------------
+zod3          805 µs/iter     (771 µs … 2'802 µs)    804 µs    928 µs  2'802 µs
+zod4          124 µs/iter     (118 µs … 1'236 µs)    119 µs    231 µs    329 µs
+
+summary for z.object() safeParse
+  zod4
+   6.5x faster than zod3
+```
+
+## TypeScript compilation performance
+
+Zod 4 also dramatically reduces the burden on TypeScript's type checker:
+
+### 100x reduction in type instantiations
+
+Consider this simple schema:
+
+```ts
+import * as z from "zod";
+
+export const A = z.object({
+  a: z.string(),
+  b: z.string(),
+  c: z.string(),
+  d: z.string(),
+  e: z.string(),
+});
+
+export const B = A.extend({
+  f: z.string(),
+  g: z.string(),
+  h: z.string(),
+});
+```
+
+Compiling this file with `tsc --extendedDiagnostics`:
+- **Zod 3**: >25,000 type instantiations
+- **Zod 4**: ~175 type instantiations
+
+This 100x+ reduction means faster IDE responsiveness and quicker compilation times.
+
+<Tip>
+You can run these benchmarks yourself:
+
+```sh
+git clone git@github.com:colinhacks/zod.git
+cd zod
+git switch v4
+pnpm install
+pnpm bench string  # or array, object-moltar, etc.
+```
+</Tip>
+
+## Best practices for optimal performance
+
+### 1. Prefer `.safeParse()` over `try/catch`
+
+For performance-critical code paths, use `.safeParse()` instead of catching errors:
+
+<Tabs>
+  <Tab title="Faster">
+```ts
+const result = schema.safeParse(data);
+if (!result.success) {
+  // handle error
+  return null;
+}
+return result.data;
+```
+  </Tab>
+  <Tab title="Slower">
+```ts
+try {
+  return schema.parse(data);
+} catch (error) {
+  // handle error
+  return null;
+}
+```
+  </Tab>
+</Tabs>
+
+The `.safeParse()` method avoids the overhead of throwing and catching exceptions, which can be significant in tight loops.
+
+### 2. Hoist schema definitions
+
+Define schemas once at the module level, not inside functions:
+
+<Tabs>
+  <Tab title="Optimized">
+```ts
+import * as z from "zod";
+
+// Define once at module level
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+});
+
+export function validateUser(data: unknown) {
+  return UserSchema.safeParse(data);
+}
+```
+  </Tab>
+  <Tab title="Unoptimized">
+```ts
+import * as z from "zod";
+
+export function validateUser(data: unknown) {
+  // Schema recreated on every call!
+  const UserSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+  });
+  return UserSchema.safeParse(data);
+}
+```
+  </Tab>
+</Tabs>
+
+Recreating schemas on every function call wastes CPU cycles and memory. Use [babel-plugin-zod-hoist](https://github.com/gajus/babel-plugin-zod-hoist) to automatically hoist schemas during your build process.
+
+### 3. Use `.extend()` instead of `.merge()`
+
+The `.extend()` method provides better TypeScript performance than `.merge()`:
+
+```ts
+const BaseSchema = z.object({
+  id: z.string(),
+  createdAt: z.date(),
+});
+
+// ✅ Better performance
+const UserSchema = BaseSchema.extend({
+  name: z.string(),
+  email: z.string().email(),
+});
+
+// For even better TypeScript performance, use destructuring:
+const UserSchema = z.object({
+  ...BaseSchema.shape,
+  name: z.string(),
+  email: z.string().email(),
+});
+```
+
+### 4. Choose the right parsing method
+
+Zod offers several parsing methods with different trade-offs:
+
+| Method | Use case | Performance |
+|--------|----------|-------------|
+| `.parse()` | When you want to throw on invalid data | Fast, but throwing is slower |
+| `.safeParse()` | When you want to handle errors gracefully | Fastest |
+| `.parseAsync()` | When you have async refinements/transforms | Slower (async overhead) |
+| `.safeParseAsync()` | Async validation with error handling | Slower (async overhead) |
+
+### 5. Minimize use of refinements and transforms
+
+Refinements and transforms add overhead. Use them judiciously:
+
+```ts
+// ✅ Good: Built-in validation is optimized
+const EmailSchema = z.string().email();
+
+// ⚠️ Slower: Custom refinement adds overhead
+const EmailSchema = z.string().refine(
+  (val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
+  { message: "Invalid email" }
+);
+```
+
+When you do need custom logic, prefer `.check()` for performance-critical paths:
+
+```ts
+// Faster for hot paths
+const schema = z.string().check((val, ctx) => {
+  if (!isValidEmail(val)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Invalid email",
+    });
+  }
+});
+
+// More convenient but slightly slower
+const schema = z.string().superRefine((val, ctx) => {
+  if (!isValidEmail(val)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Invalid email",
+    });
+  }
+});
+```
+
+### 6. Consider using Zod Mini for bundle size
+
+If bundle size is critical for your use case, consider [Zod Mini](/packages/mini):
+
+| Package | Gzipped size |
+|---------|-------------|
+| Zod Mini | 4.0kb |
+| Zod | 13.1kb |
+
+However, for most applications, the ~9kb difference is negligible. See the [Zod Mini documentation](/packages/mini) for guidance on when it makes sense to use.
+
+### 7. Leverage TypeScript's type narrowing
+
+When possible, combine Zod with TypeScript's built-in type guards:
+
+```ts
+function processData(data: unknown) {
+  // Quick runtime check first
+  if (typeof data !== 'object' || data === null) {
+    return null;
+  }
+  
+  // Then validate with Zod
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    return null;
+  }
+  
+  return result.data;
+}
+```
+
+## Bundle size considerations
+
+### Frontend applications
+
+Bundle size on the scale of Zod (5-10kb gzipped) is only a meaningful concern when optimizing for:
+- Users with slow mobile network connections
+- Rural or developing areas with limited bandwidth
+- Extremely strict performance budgets
+
+For most applications, the developer experience benefits of regular Zod outweigh the bundle size cost.
+
+### Backend applications
+
+On the backend, bundle size is rarely a concern, even in serverless environments like AWS Lambda.
+
+Benchmark data for Lambda cold start times:
+
+| Bundle size | Cold start time |
+|-------------|----------------|
+| 1kb | 171ms |
+| 17kb (Zod) | ~171.6ms (interpolated) |
+| 128kb | 176ms |
+| 256kb | 182ms |
+| 512kb | 279ms |
+| 1mb | 557ms |
+
+Adding Zod to your Lambda function adds approximately **0.6ms** to cold start time — negligible in practice.
+
+## Network performance
+
+The round trip time to the server (100-200ms) typically dwarfs the time to download an additional 10kb. Only on slow 3G connections (< 1Mbps) does the download time become significant.
+
+If you're not specifically optimizing for users in rural or developing areas, your time is likely better spent on other optimizations.
+
+## Profiling and measurement
+
+If you suspect Zod is a performance bottleneck, measure it:
+
+```ts
+const iterations = 10000;
+const data = { /* your test data */ };
+
+console.time('zod-parse');
+for (let i = 0; i < iterations; i++) {
+  schema.safeParse(data);
+}
+console.timeEnd('zod-parse');
+```
+
+Or use a proper benchmarking library:
+
+```ts
+import { bench, run } from 'mitata';
+
+bench('schema.safeParse', () => {
+  schema.safeParse(data);
+});
+
+await run();
+```
+
+Always profile before optimizing. Zod 4 is fast enough for the vast majority of use cases.
+
+## Summary
+
+**Key takeaways:**
+
+1. Zod 4 is 6-14x faster than Zod 3 for runtime parsing
+2. TypeScript compilation is 100x more efficient
+3. Use `.safeParse()` in performance-critical code
+4. Hoist schema definitions to module level
+5. Minimize custom refinements and transforms
+6. Bundle size is rarely a practical concern
+7. Always measure before optimizing
+
+For most applications, Zod 4's baseline performance is more than sufficient. Focus on writing clear, maintainable validation logic, and reach for optimizations only when profiling reveals a genuine bottleneck.

@@ -1,0 +1,327 @@
+---
+title: Async Validation
+description: Async parsing, async refinements, and async transforms in Zod
+---
+
+## Async Parsing
+
+Zod supports asynchronous validation for schemas with async refinements or transforms.
+
+### Basic Async Parsing
+
+Use `.parseAsync()` or `.safeParseAsync()` for async validation:
+
+```typescript
+import * as z from 'zod';
+
+const stringSchema = z.string();
+
+const goodData = "XXX";
+const goodResult = await stringSchema.safeParseAsync(goodData);
+
+if (goodResult.success) {
+  console.log(goodResult.data); // "XXX"
+}
+
+const badData = 12;
+const badResult = await stringSchema.safeParseAsync(badData);
+
+if (!badResult.success) {
+  console.log(badResult.error); // ZodError
+}
+```
+
+### Sync vs Async Parse
+
+```typescript
+const schema = z.string();
+
+// Synchronous - throws immediately
+try {
+  schema.parse(123);
+} catch (error) {
+  console.log(error); // ZodError
+}
+
+// Asynchronous - returns Promise
+const result = await schema.parseAsync(123).catch((error) => {
+  console.log(error); // ZodError
+});
+```
+
+<Warning>
+If a schema contains async refinements, calling `.parse()` or `.safeParse()` will throw an error. You must use `.parseAsync()` or `.safeParseAsync()`.
+</Warning>
+
+## Async Refinements
+
+### Basic Async Refinement
+
+Refinements can be async functions:
+
+```typescript
+const schema = z.string().refine(async (_val) => {
+  // Async validation logic
+  return true;
+});
+
+const result = await schema.parseAsync("asdf");
+console.log(result); // "asdf"
+```
+
+### Async Refinement with Promises
+
+```typescript
+const schema1 = z.string().refine((_val) => Promise.resolve(true));
+const v1 = await schema1.parseAsync("asdf");
+// Success: "asdf"
+
+const schema2 = z.string().refine((_val) => Promise.resolve(false));
+await schema2.parseAsync("asdf"); // Throws ZodError
+```
+
+### Value-Based Async Validation
+
+```typescript
+const schema = z.string().refine(async (val) => {
+  // Access the value being validated
+  return val.length > 5;
+});
+
+const r1 = await schema.safeParseAsync("asdf");
+console.log(r1.success); // false
+
+const r2 = await schema.safeParseAsync("asdf123");
+console.log(r2.success); // true
+console.log(r2.data); // "asdf123"
+```
+
+### Real-World Example: Database Validation
+
+```typescript
+const userSchema = z.object({
+  email: z.string().email().refine(
+    async (email) => {
+      // Check if email already exists in database
+      const existing = await db.users.findOne({ email });
+      return !existing;
+    },
+    { message: "Email already registered" }
+  ),
+  username: z.string().min(3).refine(
+    async (username) => {
+      // Validate username availability
+      const taken = await db.users.findOne({ username });
+      return !taken;
+    },
+    { message: "Username already taken" }
+  )
+});
+
+const result = await userSchema.safeParseAsync({
+  email: "test@example.com",
+  username: "john"
+});
+```
+
+## Async Error Behavior
+
+### Sync Parse Throws on Async Refinements
+
+```typescript
+const s1 = z.string().refine(async (_val) => true);
+
+// This throws an error!
+try {
+  s1.safeParse("asdf");
+} catch (error) {
+  // Error: Cannot use sync parse on schema with async refinements
+}
+```
+
+### Multiple Async Errors
+
+Async validation collects all errors, just like synchronous validation:
+
+```typescript
+const base = z.object({
+  hello: z.string(),
+  foo: z.number()
+});
+
+const testval = { hello: 3, foo: "hello" };
+
+// Synchronous
+const result1 = base.safeParse(testval);
+console.log(result1.error!.issues.length); // 2
+
+// Asynchronous - same number of errors
+const result2 = await base.safeParseAsync(testval);
+console.log(result2.error!.issues.length); // 2
+```
+
+### Non-Empty String Validation
+
+```typescript
+const base = z.object({
+  hello: z.string().refine((x) => x && x.length > 0),
+  foo: z.string().refine((x) => x && x.length > 0)
+});
+
+const testval = { hello: "", foo: "" };
+
+const r1 = base.safeParse(testval);
+const r2 = await base.safeParseAsync(testval);
+
+// Both have the same number of issues
+console.log(r1.error!.issues.length === r2.error!.issues.length); // true
+```
+
+## Async Refinement Execution
+
+### Early Termination
+
+Async refinements stop executing after the first failure:
+
+```typescript
+let count = 0;
+
+const schema = z.object({
+  hello: z.string(),
+  foo: z.number()
+    .refine(async () => {
+      count++;
+      return true;
+    })
+    .refine(async () => {
+      count++;
+      return true;
+    }, "Good")
+});
+
+const testval = { hello: "bye", foo: 3 };
+const result = await schema.safeParseAsync(testval);
+
+if (!result.success) {
+  console.log(result.error.issues.length); // 1
+  console.log(count); // 1 (second refinement didn't run)
+}
+```
+
+### Mixed Sync and Async Validation
+
+```typescript
+const schema = z.object({
+  hello: z.string(),
+  foo: z.object({
+    bar: z.number().refine(
+      async () => new Promise((resolve) => {
+        setTimeout(() => resolve(false), 500);
+      })
+    )
+  })
+});
+
+const testval = { hello: 3, foo: { bar: 4 } };
+
+// Sync validation
+const result1 = schema.safeParse(testval); // Throws
+
+// Async validation - collects all errors
+const result2 = await schema.safeParseAsync(testval);
+console.log(result2.error!.issues.length); // Multiple issues
+```
+
+## Promise Schemas
+
+Validate Promise values:
+
+```typescript
+const promiseSchema = z.promise(z.number());
+
+// Valid: Promise resolves to number
+const goodData = Promise.resolve(123);
+const goodResult = await promiseSchema.safeParseAsync(goodData);
+
+if (goodResult.success) {
+  console.log(goodResult.data); // 123 (unwrapped)
+  console.log(typeof goodResult.data); // "number"
+}
+
+// Invalid: Promise resolves to wrong type
+const badData = Promise.resolve("XXX");
+const badResult = await promiseSchema.safeParseAsync(badData);
+
+if (!badResult.success) {
+  console.log(badResult.error); // ZodError
+}
+```
+
+## Async Transforms
+
+While not shown in the test files, async transforms work similarly to async refinements:
+
+```typescript
+const schema = z.string().transform(async (val) => {
+  // Async transformation
+  const result = await fetchData(val);
+  return result;
+});
+
+const data = await schema.parseAsync("input");
+```
+
+## All Schema Types Support Async
+
+Async parsing works with all Zod schema types:
+
+```typescript
+// String
+await z.string().safeParseAsync("XXX");
+
+// Number
+await z.number().safeParseAsync(1234.2353);
+
+// BigInt
+await z.bigint().safeParseAsync(BigInt(145));
+
+// Boolean
+await z.boolean().safeParseAsync(true);
+
+// Date
+await z.date().safeParseAsync(new Date());
+
+// Array
+await z.array(z.string()).safeParseAsync(["XXX"]);
+
+// Object
+await z.object({ string: z.string() }).safeParseAsync({ string: "XXX" });
+
+// Union
+await z.union([z.string(), z.undefined()]).safeParseAsync(undefined);
+
+// Record
+await z.record(z.string(), z.object({})).safeParseAsync({ a: {}, b: {} });
+
+// Literal
+await z.literal("asdf").safeParseAsync("asdf");
+
+// Enum
+await z.enum(["fish", "whale"]).safeParseAsync("whale");
+
+// Promise
+await z.promise(z.number()).safeParseAsync(Promise.resolve(123));
+```
+
+## Best Practices
+
+1. **Always use async methods** - Use `.parseAsync()` or `.safeParseAsync()` with async refinements
+2. **Optimize async operations** - Async refinements run sequentially; minimize API calls
+3. **Handle errors gracefully** - Use `.safeParseAsync()` to avoid unhandled promise rejections
+4. **Avoid mixing parse types** - Don't call `.parse()` on schemas with async refinements
+5. **Consider performance** - Async validation is slower; use sync validation when possible
+6. **Test both paths** - Verify both success and failure cases in async validation
+
+<Note>
+Async refinements are perfect for validating against external data sources like databases, APIs, or file systems.
+</Note>

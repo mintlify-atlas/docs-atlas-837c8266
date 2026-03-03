@@ -1,0 +1,329 @@
+---
+title: Error Customization
+description: Customizing error messages with error maps and global configuration
+---
+
+## Error Maps
+
+Error maps allow you to customize error messages based on the validation issue type and context.
+
+### Basic Error Map
+
+An error map is a function that receives an issue and returns a custom message:
+
+```typescript
+import * as z from 'zod';
+
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "invalid_type") {
+    if (issue.expected === "string") {
+      return { message: "bad type!" };
+    }
+  }
+  if (issue.code === "custom") {
+    return { message: `less-than-${issue.params?.minimum}` };
+  }
+  return undefined; // Use default message
+};
+
+const result = z.string().safeParse(234, { error: errorMap });
+// Error message: "bad type!"
+```
+
+### Error Map Return Values
+
+Error maps can return:
+
+- `{ message: string }` - Custom error message
+- `string` - Shorthand for `{ message: string }`
+- `undefined` or `null` - Fall back to default message
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  // Object form
+  if (issue.code === "invalid_type") {
+    return { message: "Invalid type" };
+  }
+  
+  // String shorthand
+  if (issue.code === "too_small") {
+    return "Too small";
+  }
+  
+  // Fall back to default
+  return undefined;
+};
+```
+
+## Contextual Error Maps
+
+Apply error maps to specific parse operations:
+
+```typescript
+const schema = z.string();
+
+// Use custom error map for this parse only
+const result = schema.safeParse(123, {
+  error: (issue) => ({ message: "contextual" })
+});
+```
+
+### Refinements with Error Maps
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "custom") {
+    return { message: `less-than-${issue.params?.minimum}` };
+  }
+  return undefined;
+};
+
+const schema = z.number().refine((val) => val >= 3, {
+  params: { minimum: 3 }
+});
+
+const result = schema.safeParse(2, { error: errorMap });
+// {
+//   "code": "custom",
+//   "path": [],
+//   "params": { "minimum": 3 },
+//   "message": "less-than-3"
+// }
+```
+
+## Schema-Bound Error Maps
+
+Bind error maps directly to schemas:
+
+```typescript
+const stringWithCustomError = z.string({
+  error: () => "bound"
+});
+
+const result = stringWithCustomError.safeParse(1234);
+// message: "bound"
+```
+
+### Bound vs Contextual Precedence
+
+Schema-bound error maps take precedence over contextual ones:
+
+```typescript
+const boundSchema = z.string({
+  error: () => "bound"
+});
+
+// Contextual error map is ignored
+const result = boundSchema.safeParse(undefined, {
+  error: () => ({ message: "contextual" })
+});
+// message: "bound" (not "contextual")
+```
+
+## Global Error Configuration
+
+Set a global custom error map using `z.config()`:
+
+```typescript
+// Set global error map
+z.config({
+  customError: () => ({ message: "override" })
+});
+
+const schema = z.string().min(10);
+const result = schema.safeParse("tooshort");
+// All errors use the global error map
+
+// Clear global error map
+z.config({ customError: undefined });
+```
+
+<Warning>
+Global error maps affect all validations in your application. Use with caution and consider schema-bound or contextual error maps for more targeted customization.
+</Warning>
+
+## Error Map Issue Types
+
+### Invalid Type Issues
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "invalid_type") {
+    const expected = issue.expected; // "string" | "number" | "boolean" | ...
+    const received = issue.input; // The actual input value
+    return { message: `Expected ${expected}, got ${typeof received}` };
+  }
+  return undefined;
+};
+```
+
+### Size Constraint Issues
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "too_small") {
+    const { origin, minimum, inclusive, exact } = issue;
+    if (origin === "string") {
+      return { message: `String must be at least ${minimum} characters` };
+    }
+    if (origin === "array") {
+      return { message: `Array must contain at least ${minimum} items` };
+    }
+  }
+  
+  if (issue.code === "too_big") {
+    const { origin, maximum } = issue;
+    return { message: `${origin} exceeds maximum of ${maximum}` };
+  }
+  
+  return undefined;
+};
+```
+
+### Invalid Format Issues
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "invalid_format") {
+    const format = issue.format; // "email" | "url" | "uuid" | "regex" | ...
+    
+    if (format === "email") {
+      return { message: "Please enter a valid email address" };
+    }
+    
+    if (format === "regex" && issue.pattern) {
+      return { message: `Must match pattern: ${issue.pattern}` };
+    }
+  }
+  return undefined;
+};
+```
+
+### Custom Issues with Params
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "custom" && issue.params) {
+    // Access custom params from refinements
+    if ('minimum' in issue.params) {
+      return { message: `Value must be at least ${issue.params.minimum}` };
+    }
+    if ('field' in issue.params) {
+      return { message: `Invalid ${issue.params.field}` };
+    }
+  }
+  return undefined;
+};
+```
+
+## Advanced Error Map Patterns
+
+### Path-Aware Error Messages
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  const path = issue.path ?? [];
+  
+  if (path.length > 0) {
+    const fieldName = path[path.length - 1];
+    return { message: `Invalid ${fieldName}: ${issue.code}` };
+  }
+  
+  return undefined;
+};
+
+const schema = z.object({
+  items: z.array(z.string()).refine(
+    (data) => data.length > 3,
+    { path: ["items-too-few"] }
+  )
+});
+
+const result = schema.safeParse({ items: ["first"] }, { error: errorMap });
+// Path will be ["items", "items-too-few"]
+```
+
+### Unrecognized Keys
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "unrecognized_keys") {
+    const keys = issue.keys; // Array of unrecognized key names
+    return { message: `Unknown fields: ${keys.join(", ")}` };
+  }
+  return undefined;
+};
+```
+
+### Invalid Union
+
+```typescript
+const errorMap: z.ZodErrorMap = (issue) => {
+  if (issue.code === "invalid_union") {
+    if (issue.errors.length > 0) {
+      // No match found
+      return { message: "Value doesn't match any of the expected types" };
+    } else if (issue.inclusive === false) {
+      // Multiple matches (for non-inclusive unions)
+      return { message: "Value matches multiple types" };
+    }
+  }
+  return undefined;
+};
+```
+
+## Combining Error Messages
+
+### Hard-Coded Message with Error Map
+
+```typescript
+const schema = z.string().refine(
+  (val) => val.length > 12,
+  {
+    params: { minimum: 13 },
+    message: "override" // This takes precedence
+  }
+);
+
+const result = schema.safeParse("asdf", {
+  error: () => "contextual"
+});
+// message: "override" (hard-coded message wins)
+```
+
+### Error and Message Conflict
+
+```typescript
+// This will throw an error - cannot use both
+try {
+  z.string().refine((_) => true, {
+    message: "override",
+    error: (iss) => iss.input === undefined ? "asdf" : null
+  });
+} catch (e) {
+  // Error: Cannot use both 'message' and 'error' options
+}
+```
+
+<Note>
+You cannot use both `message` and `error` options together. The `message` option is a shorthand that takes precedence.
+</Note>
+
+## Empty String Messages
+
+You can explicitly set empty error messages:
+
+```typescript
+const schema = z.string().max(1, { message: "" });
+const result = schema.safeParse("asdf");
+// message: ""
+```
+
+## Best Practices
+
+1. **Return undefined for defaults** - Let Zod generate standard messages when appropriate
+2. **Use params for context** - Pass metadata through `params` for dynamic messages
+3. **Prefer schema-bound for reusable schemas** - Bind error maps to schemas you'll reuse
+4. **Use contextual for one-off customization** - Apply custom error maps at parse time for specific cases
+5. **Avoid global error maps in libraries** - They affect all Zod usage in the application
+6. **Consider internationalization** - Error maps are perfect for translating messages

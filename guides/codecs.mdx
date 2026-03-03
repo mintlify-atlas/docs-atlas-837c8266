@@ -1,0 +1,407 @@
+---
+title: Codecs
+description: Bidirectional encode/decode functionality with z.codec()
+---
+
+## Overview
+
+Codecs provide bidirectional transformation between two representations of data. They combine input validation, output validation, and reversible transformations.
+
+## Basic Codec
+
+Create a codec using `z.codec()` with two schemas and transformation functions:
+
+```typescript
+import * as z from 'zod';
+
+const isoDateCodec = z.codec(
+  z.iso.datetime(),  // Input: ISO string
+  z.date(),          // Output: Date object
+  {
+    decode: (isoString) => new Date(isoString),  // ISO string → Date
+    encode: (date) => date.toISOString()         // Date → ISO string
+  }
+);
+
+// Forward decoding: ISO string → Date
+const date = z.decode(isoDateCodec, "2024-01-15T10:30:00.000Z");
+console.log(date); // Date object
+
+// Backward encoding: Date → ISO string
+const isoString = z.encode(isoDateCodec, new Date("2024-01-15T10:30:00.000Z"));
+console.log(isoString); // "2024-01-15T10:30:00.000Z"
+```
+
+## Codec Structure
+
+A codec is defined with:
+
+- **Input Schema (A)**: Validates the encoded form
+- **Output Schema (B)**: Validates the decoded form  
+- **decode**: Transforms `A` → `B` (forward direction)
+- **encode**: Transforms `B` → `A` (backward direction)
+
+```typescript
+z.codec(
+  inputSchema,   // Schema A
+  outputSchema,  // Schema B
+  {
+    decode: (a) => b,  // A → B
+    encode: (b) => a   // B → A
+  }
+);
+```
+
+## Codec Operations
+
+### Decode (Forward)
+
+Transform from input to output representation:
+
+```typescript
+const stringNumberCodec = z.codec(
+  z.string(),
+  z.number(),
+  {
+    decode: (str) => Number.parseFloat(str),
+    encode: (num) => num.toString()
+  }
+);
+
+// Synchronous decode
+const num = z.decode(stringNumberCodec, "42.5");
+console.log(num); // 42.5
+
+// Safe decode (doesn't throw)
+const result = z.safeDecode(stringNumberCodec, "invalid");
+if (result.success) {
+  console.log(result.data);
+} else {
+  console.log(result.error);
+}
+```
+
+### Encode (Backward)
+
+Transform from output back to input representation:
+
+```typescript
+// Synchronous encode
+const str = z.encode(stringNumberCodec, 42.5);
+console.log(str); // "42.5"
+
+// Safe encode (doesn't throw)
+const result = z.safeEncode(stringNumberCodec, 42.5);
+if (result.success) {
+  console.log(result.data); // "42.5"
+}
+```
+
+### Async Operations
+
+All codec operations support async transformations:
+
+```typescript
+const asyncCodec = z.codec(
+  z.string(),
+  z.number(),
+  {
+    decode: async (str) => {
+      await new Promise(resolve => setTimeout(resolve, 1));
+      return Number.parseFloat(str);
+    },
+    encode: async (num) => {
+      await new Promise(resolve => setTimeout(resolve, 1));
+      return num.toString();
+    }
+  }
+);
+
+// Async decode
+const decoded = await z.decodeAsync(asyncCodec, "42.5");
+console.log(decoded); // 42.5
+
+// Async encode
+const encoded = await z.encodeAsync(asyncCodec, 42.5);
+console.log(encoded); // "42.5"
+
+// Safe async operations
+const safeResult = await z.safeDecodeAsync(asyncCodec, "123");
+```
+
+## Round-Trip Conversion
+
+Codecs guarantee bidirectional transformation:
+
+```typescript
+const isoDateCodec = z.codec(
+  z.iso.datetime(),
+  z.date(),
+  {
+    decode: (isoString) => new Date(isoString),
+    encode: (date) => date.toISOString()
+  }
+);
+
+const original = "2024-12-25T15:45:30.123Z";
+const toDate = z.decode(isoDateCodec, original);
+const backToString = z.encode(isoDateCodec, toDate);
+
+console.log(backToString); // "2024-12-25T15:45:30.123Z"
+console.log(backToString === original); // true
+```
+
+## Codec Type Signatures
+
+The type system ensures correct transformations:
+
+```typescript
+const codec = z.codec(
+  z.string(),
+  z.number(),
+  {
+    // decode parameter must be: core.output<A> (string)
+    // decode return must be: core.input<B> (number)
+    decode: (value: string) => Number(value),
+    
+    // encode parameter must be: core.input<B> (number)
+    // encode return must be: core.output<A> (string)
+    encode: (value: number) => String(value)
+  }
+);
+
+// Type inference works automatically
+const decoded: number = z.decode(codec, "123");
+const encoded: string = z.encode(codec, 123);
+```
+
+## Codecs with Refinements
+
+Add refinements to codec schemas:
+
+```typescript
+const isoDateCodec = z.codec(
+  z.iso.datetime(),
+  z.date(),
+  {
+    decode: (isoString) => new Date(isoString),
+    encode: (date) => date.toISOString()
+  }
+).refine((val) => val.getFullYear() === 2024, {
+  error: "Year must be 2024"
+});
+
+// Valid 2024 date
+const validDate = z.decode(isoDateCodec, "2024-01-15T10:30:00.000Z");
+console.log(validDate.getFullYear()); // 2024
+
+// Invalid year
+const invalidResult = z.safeDecode(isoDateCodec, "2023-01-15T10:30:00.000Z");
+if (!invalidResult.success) {
+  console.log(invalidResult.error.issues);
+  // [{ code: "custom", message: "Year must be 2024", ... }]
+}
+```
+
+## Complex Codec Example
+
+Nested object with codec property:
+
+```typescript
+const waypointSchema = z.object({
+  name: z.string().min(1, "Waypoint name required"),
+  difficulty: z.enum(["easy", "medium", "hard"]),
+  coordinate: z.codec(
+    z.string().regex(/^-?\d+,-?\d+$/, "Must be 'x,y' format"),
+    z.object({ x: z.number(), y: z.number() })
+      .refine((coord) => coord.x >= 0 && coord.y >= 0, {
+        error: "Coordinates must be non-negative"
+      }),
+    {
+      decode: (coordString: string) => {
+        const [x, y] = coordString.split(",").map(Number);
+        return { x, y };
+      },
+      encode: (coord: { x: number; y: number }) => `${coord.x},${coord.y}`
+    }
+  ).refine((coord) => coord.x <= 1000 && coord.y <= 1000, {
+    error: "Coordinates must be within bounds"
+  })
+}).refine((waypoint) => {
+  return waypoint.difficulty !== "hard" || waypoint.coordinate.x >= 100;
+}, {
+  error: "Hard waypoints must be at least 100 units from origin"
+});
+
+const inputWaypoint = {
+  name: "Summit Point",
+  difficulty: "medium" as const,
+  coordinate: "150,200"
+};
+
+// Decode: coordinate string → coordinate object
+const decoded = z.decode(waypointSchema, inputWaypoint);
+console.log(decoded);
+// {
+//   name: "Summit Point",
+//   difficulty: "medium",
+//   coordinate: { x: 150, y: 200 }
+// }
+
+// Encode: coordinate object → coordinate string
+const encoded = z.encode(waypointSchema, decoded);
+console.log(encoded);
+// {
+//   name: "Summit Point",
+//   difficulty: "medium",
+//   coordinate: "150,200"
+// }
+```
+
+## Validation at Multiple Levels
+
+Codecs validate at each level:
+
+```typescript
+// Input validation (string format)
+const result1 = z.safeDecode(waypointSchema, {
+  name: "Test",
+  difficulty: "easy",
+  coordinate: "invalid"  // Fails regex validation
+});
+// Error: "Must be 'x,y' format"
+
+// Output validation (coordinate constraints)
+const result2 = z.safeDecode(waypointSchema, {
+  name: "Test",
+  difficulty: "easy",
+  coordinate: "-5,10"  // Fails non-negative check
+});
+// Error: "Coordinates must be non-negative"
+
+// Codec refinement (bounds check)
+const result3 = z.safeDecode(waypointSchema, {
+  name: "Test",
+  difficulty: "easy",
+  coordinate: "1500,2000"  // Exceeds bounds
+});
+// Error: "Coordinates must be within bounds"
+
+// Object refinement (hard waypoint constraint)
+const result4 = z.safeDecode(waypointSchema, {
+  name: "Expert Point",
+  difficulty: "hard",
+  coordinate: "50,60"  // x < 100 for hard difficulty
+});
+// Error: "Hard waypoints must be at least 100 units from origin"
+```
+
+## Mutating Refinements
+
+Codecs support refinements that mutate data:
+
+```typescript
+const A = z.codec(
+  z.string(),
+  z.string().trim(),
+  {
+    decode: (val) => val,
+    encode: (val) => val
+  }
+);
+
+console.log(z.decode(A, " asdf ")); // "asdf" (trimmed)
+console.log(z.encode(A, " asdf ")); // "asdf" (trimmed)
+
+// With .check() for inline checks
+const B = z.codec(
+  z.string(),
+  z.string(),
+  {
+    decode: (val) => val,
+    encode: (val) => val
+  }
+).check(z.trim(), z.maxLength(4));
+
+console.log(z.decode(B, " asdf ")); // "asdf"
+console.log(z.encode(B, " asdf ")); // "asdf"
+```
+
+## Codec with Overwrites
+
+Apply transformations after codec operations:
+
+```typescript
+const stringPlusA = z.string().overwrite((val) => val + "a");
+
+const A = z.codec(
+  stringPlusA,
+  stringPlusA,
+  {
+    decode: (val) => val,
+    encode: (val) => val
+  }
+).overwrite((val) => val + "a");
+
+console.log(z.decode(A, "")); // "aaa"
+console.log(z.encode(A, "")); // "aaa"
+```
+
+## Instance Checks
+
+```typescript
+const codec = z.codec(z.iso.datetime(), z.date(), {
+  decode: (iso) => new Date(iso),
+  encode: (date) => date.toISOString()
+});
+
+// Codec is also a Pipe and Type
+console.log(codec instanceof z.ZodCodec);     // true
+console.log(codec instanceof z.ZodPipe);      // true
+console.log(codec instanceof z.ZodType);      // true
+console.log(codec instanceof z.core.$ZodCodec); // true
+```
+
+## Error Handling
+
+```typescript
+const isoDateCodec = z.codec(
+  z.iso.datetime(),
+  z.date(),
+  {
+    decode: (isoString) => new Date(isoString),
+    encode: (date) => date.toISOString()
+  }
+);
+
+// Input validation error
+const result = z.safeDecode(isoDateCodec, "invalid-date");
+if (!result.success) {
+  console.log(result.error.issues);
+  // [{
+  //   code: "invalid_format",
+  //   format: "datetime",
+  //   message: "Invalid ISO datetime",
+  //   origin: "string",
+  //   path: [],
+  //   pattern: "/^(?:(?:\\d\\d..."
+  // }]
+}
+```
+
+## Best Practices
+
+1. **Ensure reversibility** - Encoding after decoding should return the original value
+2. **Validate both directions** - Both input and output schemas should have proper validation
+3. **Use refinements for constraints** - Add refinements to enforce additional rules
+4. **Handle edge cases** - Consider how transformations handle null, undefined, edge values
+5. **Type safety** - Let TypeScript infer types from codec definitions
+6. **Async when needed** - Use async transforms for I/O operations
+
+<Note>
+Codecs are perfect for API serialization, database value conversion, and any scenario requiring reversible transformations with validation.
+</Note>
+
+<Warning>
+Make sure encode and decode functions are true inverses. Non-reversible codecs can lead to data loss or validation errors.
+</Warning>

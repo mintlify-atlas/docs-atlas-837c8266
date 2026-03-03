@@ -1,0 +1,264 @@
+---
+title: UUID Validation
+description: Validate UUIDs with z.uuid(), z.uuidv4(), z.uuidv6(), and z.uuidv7()
+---
+
+## Overview
+
+Zod provides functions for validating UUIDs (Universally Unique Identifiers) according to RFC 9562/4122:
+
+- `z.uuid()` - Validates any UUID (versions 1-8)
+- `z.uuidv4()` - Validates UUID v4 specifically
+- `z.uuidv6()` - Validates UUID v6 specifically
+- `z.uuidv7()` - Validates UUID v7 specifically
+
+```typescript
+import { z } from "zod";
+
+const uuidSchema = z.uuid();
+const uuidv4Schema = z.uuidv4();
+const uuidv6Schema = z.uuidv6();
+const uuidv7Schema = z.uuidv7();
+```
+
+**Location in source:** `~/workspace/source/packages/zod/src/v4/classic/schemas.ts:483-501`
+
+## z.uuid()
+
+Validates UUIDs of any version (1-8) with RFC-compliant variant bits.
+
+### Basic Usage
+
+```typescript
+const schema = z.uuid();
+
+schema.parse("9491d710-3185-4e06-bea0-6a2f275345e0"); // ✓ passes
+schema.parse("invalid-uuid"); // ✗ throws
+```
+
+### Valid UUID Examples
+
+```typescript
+const schema = z.uuid();
+
+// UUID v1
+schema.parse("9491d710-3185-1e06-bea0-6a2f275345e0");
+
+// UUID v2
+schema.parse("9491d710-3185-2e06-bea0-6a2f275345e0");
+
+// UUID v3
+schema.parse("9491d710-3185-3e06-bea0-6a2f275345e0");
+
+// UUID v4
+schema.parse("9491d710-3185-4e06-bea0-6a2f275345e0");
+
+// UUID v5
+schema.parse("9491d710-3185-5e06-bea0-6a2f275345e0");
+schema.parse("9491d710-3185-5e06-aea0-6a2f275345e0");
+schema.parse("9491d710-3185-5e06-8ea0-6a2f275345e0");
+schema.parse("9491d710-3185-5e06-9ea0-6a2f275345e0");
+
+// Nil UUID
+schema.parse("00000000-0000-0000-0000-000000000000");
+
+// Max UUID
+schema.parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+```
+
+### Invalid UUID Examples
+
+```typescript
+const schema = z.uuid();
+
+// Invalid version (v0 doesn't exist)
+schema.safeParse("9491d710-3185-0e06-bea0-6a2f275345e0").success; // false
+
+// Invalid variant bits
+schema.safeParse("9491d710-3185-5e06-0ea0-6a2f275345e0").success; // false
+
+// Variant 0 (NCS backward compatibility - not standard)
+schema.safeParse("b3ce60f8-e8b9-40f5-1150-172ede56ff74").success; // false
+
+// Variant 2 (Microsoft backward compatibility - not standard)
+schema.safeParse("92e76bf9-28b3-4730-cd7f-cb6bc51f8c09").success; // false
+
+// Invalid format
+schema.safeParse("invalid uuid").success; // false
+
+// Extra character
+schema.safeParse("9491d710-3185-4e06-bea0-6a2f275345e0X").success; // false
+```
+
+### Custom Error Message
+
+```typescript
+const schema = z.uuid("Please provide a valid UUID");
+
+const result = schema.safeParse("invalid");
+if (!result.success) {
+  console.log(result.error.issues[0].message);
+  // "Please provide a valid UUID"
+}
+```
+
+## z.uuidv4()
+
+Validates UUID version 4 specifically (random UUIDs).
+
+### Basic Usage
+
+```typescript
+const schema = z.uuidv4();
+
+schema.parse("9491d710-3185-4e06-bea0-6a2f275345e0"); // ✓ passes (v4)
+schema.parse("9491d710-3185-5e06-bea0-6a2f275345e0"); // ✗ throws (v5)
+```
+
+### Example
+
+```typescript
+const userIdSchema = z.object({
+  id: z.uuidv4(),
+  name: z.string(),
+});
+
+userIdSchema.parse({
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  name: "John Doe"
+}); // ✓ passes if id is v4
+```
+
+## z.uuidv6()
+
+Validates UUID version 6 (time-ordered UUIDs).
+
+### Basic Usage
+
+```typescript
+const schema = z.uuidv6();
+
+schema.parse("1e9c4470-3185-6000-8000-000000000000"); // ✓ passes (v6)
+schema.parse("9491d710-3185-4e06-bea0-6a2f275345e0"); // ✗ throws (v4)
+```
+
+<Note>
+  UUID v6 is designed to be time-ordered and sortable, making it useful for database primary keys and distributed systems.
+</Note>
+
+## z.uuidv7()
+
+Validates UUID version 7 (Unix timestamp-based UUIDs).
+
+### Basic Usage
+
+```typescript
+const schema = z.uuidv7();
+
+schema.parse("017f22e2-79b0-7cc3-98c4-dc0c0c07398f"); // ✓ passes (v7)
+schema.parse("9491d710-3185-4e06-bea0-6a2f275345e0"); // ✗ throws (v4)
+```
+
+<Note>
+  UUID v7 embeds a Unix timestamp in the first 48 bits, making it both time-ordered and compatible with existing UUID infrastructure. It's recommended for new applications requiring sortable identifiers.
+</Note>
+
+## Parameters
+
+All UUID functions accept an optional parameter:
+
+```typescript
+z.uuid(params?: string | UUIDParams)
+z.uuidv4(params?: string | UUIDv4Params)
+z.uuidv6(params?: string | UUIDv6Params)
+z.uuidv7(params?: string | UUIDv7Params)
+```
+
+- `string`: Custom error message
+- Params object:
+  - `message?: string`: Custom error message
+
+## Examples
+
+### Database ID Validation
+
+```typescript
+const recordSchema = z.object({
+  id: z.uuidv7(), // Modern sortable UUIDs
+  created_at: z.date(),
+  data: z.record(z.unknown()),
+});
+```
+
+### API Request Validation
+
+```typescript
+const requestSchema = z.object({
+  requestId: z.uuid(),
+  userId: z.uuidv4(),
+  sessionId: z.uuid().optional(),
+});
+```
+
+### Migration from Legacy IDs
+
+```typescript
+const idSchema = z.union([
+  z.uuidv4(), // Legacy IDs
+  z.uuidv7(), // New IDs
+]);
+```
+
+### Version-Specific Validation
+
+```typescript
+const schema = z.object({
+  // Different UUID versions for different purposes
+  transactionId: z.uuidv4(), // Random, unpredictable
+  eventId: z.uuidv7(),       // Time-ordered, sortable
+});
+
+schema.parse({
+  transactionId: "550e8400-e29b-41d4-a716-446655440000",
+  eventId: "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"
+}); // ✓ passes
+```
+
+## Return Type
+
+All UUID schemas return a `ZodUUID` that validates and returns strings.
+
+```typescript
+type Output = string;
+type Input = string;
+```
+
+## Validation Rules
+
+### UUID Format
+
+All UUID validators check for:
+
+1. Correct format: `8-4-4-4-12` hexadecimal digits
+2. Valid version bits in the 7th byte
+3. Valid variant bits in the 9th byte (RFC 9562/4122 compliant)
+
+### Version-Specific Rules
+
+- **v4**: Version bits = `0100` (4)
+- **v6**: Version bits = `0110` (6)
+- **v7**: Version bits = `0111` (7)
+
+### Variant Bits
+
+All versions require RFC-compliant variant bits: `10xx` in binary (8, 9, A, or B in hex).
+
+<Warning>
+  The UUID validator strictly enforces RFC 9562/4122 standards. UUIDs with variant 0 (NCS) or variant 2 (Microsoft) are rejected by `z.uuid()` but may be accepted by the less strict `z.guid()`.
+</Warning>
+
+## Related Methods
+
+- [z.guid()](/api/formats/guid) - Less strict GUID validation
+- [z.cuid()](/api/formats/cuid) - Collision-resistant unique IDs
+- [z.nanoid()](/api/formats/nanoid) - Compact unique IDs

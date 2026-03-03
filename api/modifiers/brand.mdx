@@ -1,0 +1,311 @@
+---
+title: .brand()
+description: Create branded types for nominal typing
+---
+
+## Basic Usage
+
+The `.brand()` modifier creates branded types, which add a compile-time distinction between values that are structurally identical but semantically different.
+
+```typescript
+import { z } from 'zod';
+
+const UserId = z.string().brand<'UserId'>();
+const ProductId = z.string().brand<'ProductId'>();
+
+type UserId = z.infer<typeof UserId>;     // string & Brand<'UserId'>
+type ProductId = z.infer<typeof ProductId>; // string & Brand<'ProductId'>
+
+function getUser(id: UserId) {
+  // ...
+}
+
+const userId = UserId.parse('user-123');
+const productId = ProductId.parse('prod-456');
+
+getUser(userId);    // OK
+getUser(productId); // Type error: ProductId is not assignable to UserId
+getUser('user-123'); // Type error: string is not assignable to UserId
+```
+
+<Note>
+Brands are purely a compile-time feature. At runtime, branded values are identical to their base types.
+</Note>
+
+## Type Inference
+
+By default, brands only affect the output type:
+
+```typescript
+const UserId = z.string().brand<'UserId'>();
+
+type Input = z.input<typeof UserId>;   // string
+type Output = z.output<typeof UserId>; // string & Brand<'UserId'>
+```
+
+This means you can parse any string, but the result is branded.
+
+## Brand Direction
+
+You can control whether brands apply to input, output, or both:
+
+### Output Only (Default)
+
+```typescript
+const UserId = z.string().brand<'UserId'>();
+// or explicitly:
+const UserId = z.string().brand<'UserId', 'out'>();
+
+type Input = z.input<typeof UserId>;   // string
+type Output = z.output<typeof UserId>; // string & Brand<'UserId'>
+```
+
+### Input Only
+
+```typescript
+const UserId = z.string().brand<'UserId', 'in'>();
+
+type Input = z.input<typeof UserId>;   // string & Brand<'UserId'>
+type Output = z.output<typeof UserId>; // string
+```
+
+### Both Input and Output
+
+```typescript
+const UserId = z.string().brand<'UserId', 'inout'>();
+
+type Input = z.input<typeof UserId>;   // string & Brand<'UserId'>
+type Output = z.output<typeof UserId>; // string & Brand<'UserId'>
+```
+
+## Multiple Brands
+
+You can apply multiple brands to create a hierarchy:
+
+```typescript
+const BaseSchema = z.object({ name: z.string() }).brand<'Base'>();
+const ExtendedSchema = BaseSchema.brand<'Extended'>();
+
+type Base = z.infer<typeof BaseSchema>;
+// { name: string } & Brand<'Base'>
+
+type Extended = z.infer<typeof ExtendedSchema>;
+// { name: string } & Brand<'Base'> & Brand<'Extended'>
+
+// Extended is assignable to Base, but not vice versa
+const processBase = (x: Base) => x;
+const processExtended = (x: Extended) => x;
+
+const base = BaseSchema.parse({ name: 'test' });
+const extended = ExtendedSchema.parse({ name: 'test' });
+
+processBase(base);      // OK
+processBase(extended);  // OK - Extended is a subtype of Base
+processExtended(extended); // OK
+processExtended(base);     // Type error
+```
+
+## Numeric and Symbol Brands
+
+Brands can be strings, numbers, or symbols:
+
+```typescript
+// Number brand
+const Answer = z.number().brand<42>();
+type Answer = z.infer<typeof Answer>;
+// number & Brand<42>
+
+// Symbol brand
+const MyBrand = Symbol('myBrand');
+const MyType = z.string().brand<typeof MyBrand>();
+type MyType = z.infer<typeof MyType>;
+// string & Brand<typeof MyBrand>
+
+// Multiple brands with different types
+const Multi = z.number()
+  .brand<'primary'>()
+  .brand<typeof MyBrand>();
+type Multi = z.infer<typeof Multi>;
+// number & Brand<'primary'> & Brand<typeof MyBrand>
+```
+
+## Branded Record Keys
+
+```typescript
+const SpecialKey = z.string().brand<'SpecialKey'>();
+
+const schema = z.record(
+  SpecialKey,
+  z.number()
+);
+
+type Schema = z.infer<typeof schema>;
+// Record<string & Brand<'SpecialKey'>, number>
+```
+
+## Use Cases
+
+### Preventing ID Mixups
+
+```typescript
+const UserId = z.string().brand<'UserId'>();
+const OrderId = z.string().brand<'OrderId'>();
+const ProductId = z.string().brand<'ProductId'>();
+
+class UserService {
+  getUser(id: z.infer<typeof UserId>) { /* ... */ }
+}
+
+class OrderService {
+  getOrder(id: z.infer<typeof OrderId>) { /* ... */ }
+}
+
+const userId = UserId.parse('user-123');
+const orderId = OrderId.parse('order-456');
+
+const userService = new UserService();
+userService.getUser(userId);  // OK
+userService.getUser(orderId); // Type error - prevents mixing up IDs
+```
+
+### Safe Numeric Types
+
+```typescript
+const PositiveInt = z.number()
+  .int()
+  .positive()
+  .brand<'PositiveInt'>();
+
+const Percentage = z.number()
+  .min(0)
+  .max(100)
+  .brand<'Percentage'>();
+
+function calculateDiscount(
+  price: number,
+  discount: z.infer<typeof Percentage>
+): number {
+  return price * (1 - discount / 100);
+}
+
+const discount = Percentage.parse(20);
+calculateDiscount(100, discount); // OK
+calculateDiscount(100, 20);       // Type error
+```
+
+### Domain-Driven Design
+
+```typescript
+const Email = z.string().email().brand<'Email'>();
+const Username = z.string().min(3).brand<'Username'>();
+const Password = z.string().min(8).brand<'Password'>();
+
+const User = z.object({
+  id: z.string().brand<'UserId'>(),
+  email: Email,
+  username: Username,
+});
+
+type User = z.infer<typeof User>;
+// {
+//   id: string & Brand<'UserId'>;
+//   email: string & Brand<'Email'>;
+//   username: string & Brand<'Username'>;
+// }
+
+function sendEmail(to: z.infer<typeof Email>) {
+  // Type system ensures you can't accidentally pass a username or plain string
+}
+```
+
+### Validated vs Unvalidated Data
+
+```typescript
+const ValidatedInput = z.string()
+  .min(1)
+  .brand<'Validated'>();
+
+function processData(data: z.infer<typeof ValidatedInput>) {
+  // data is guaranteed to be validated
+  console.log(data.toUpperCase());
+}
+
+// This won't compile - string is not branded
+// processData('raw string');
+
+// Must validate first
+const validated = ValidatedInput.parse('raw string');
+processData(validated); // OK
+```
+
+## Brand Type Helper
+
+Zod exports the `Brand` type helper for type annotations:
+
+```typescript
+import { z, type Brand } from 'zod';
+
+// Using the helper type
+type UserId = string & Brand<'UserId'>;
+
+// Or using the $brand symbol
+type ProductId = string & { [z.$brand]: { ProductId: true } };
+```
+
+## Runtime Behavior
+
+Brands have no runtime overhead:
+
+```typescript
+const UserId = z.string().brand<'UserId'>();
+
+const id = UserId.parse('user-123');
+
+console.log(id);                    // 'user-123'
+console.log(typeof id);             // 'string'
+console.log(id === 'user-123');     // true
+JSON.stringify(id);                 // '"user-123"'
+```
+
+The brand exists only in the type system - at runtime it's just the base value.
+
+## Limitations
+
+<Warning>
+Brands are erased at runtime. They only provide compile-time type safety in TypeScript.
+</Warning>
+
+```typescript
+const UserId = z.string().brand<'UserId'>();
+const ProductId = z.string().brand<'ProductId'>();
+
+const userId = UserId.parse('123');
+const productId = ProductId.parse('123');
+
+// At runtime, these are equal
+console.log(userId === productId); // true
+
+// But TypeScript treats them as different types
+const test: typeof userId = productId; // Type error
+```
+
+## Combining Brands with Validation
+
+```typescript
+// Brand represents a validated email
+const Email = z.string()
+  .email()
+  .brand<'ValidatedEmail'>();
+
+// Any value of this type has been validated
+function sendEmail(to: z.infer<typeof Email>) {
+  // No need to re-validate, type system guarantees it
+}
+
+// Create validated email
+const email = Email.parse('user@example.com');
+sendEmail(email); // OK
+
+// Can't pass unvalidated string
+sendEmail('raw@email.com'); // Type error
+```

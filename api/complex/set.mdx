@@ -1,0 +1,410 @@
+---
+title: 'z.set()'
+description: 'Define Set schemas with unique value validation'
+---
+
+## Basic Usage
+
+Create a schema for JavaScript `Set` objects with validated unique values.
+
+```typescript
+import { z } from 'zod';
+
+const StringSet = z.set(z.string());
+
+const validSet = new Set(['alice', 'bob', 'charlie']);
+StringSet.parse(validSet); // ✓ Valid
+
+const invalidSet = new Set(['alice', 123]);
+StringSet.parse(invalidSet); // ✗ Invalid - values must be strings
+
+type StringSet = z.infer<typeof StringSet>;
+// Set<string>
+```
+
+## Signature
+
+```typescript
+function set<Value extends SomeType>(
+  valueType: Value,
+  params?: string | ZodSetParams
+): ZodSet<Value>
+```
+
+<ParamField path="valueType" type="ZodType" required>
+  Schema to validate all set values.
+</ParamField>
+
+<ParamField path="params" type="string | ZodSetParams">
+  Optional error message (string) or configuration object.
+</ParamField>
+
+## Uniqueness
+
+Sets automatically ensure uniqueness:
+
+```typescript
+const numbers = new Set([1, 2, 3, 2, 1]);
+console.log(numbers.size); // 3 - duplicates removed
+console.log([...numbers]); // [1, 2, 3]
+
+const NumberSet = z.set(z.number());
+NumberSet.parse(numbers); // ✓ Valid - Set contains [1, 2, 3]
+```
+
+<Note>
+Sets use value equality for primitives (string, number, boolean) and reference equality for objects. Two objects with identical properties are considered different values.
+</Note>
+
+```typescript
+const objects = new Set([
+  { id: 1, name: 'Alice' },
+  { id: 1, name: 'Alice' }, // Different reference - both kept!
+]);
+console.log(objects.size); // 2 - objects are different references
+```
+
+## Methods
+
+### min()
+
+Set a minimum size for the set.
+
+```typescript
+const AtLeastThree = z.set(z.string()).min(3);
+
+const valid = new Set(['a', 'b', 'c']);
+AtLeastThree.parse(valid); // ✓ Valid
+
+const invalid = new Set(['a', 'b']);
+AtLeastThree.parse(invalid); // ✗ Invalid - too few values
+```
+
+**Signature:**
+
+```typescript
+min(minSize: number, params?: string | ZodCheckMinSizeParams): this
+```
+
+<ParamField path="minSize" type="number" required>
+  Minimum number of unique values required.
+</ParamField>
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+  
+  ```typescript
+  z.set(z.string()).min(3, 'Need at least 3 unique values')
+  ```
+</ParamField>
+
+### max()
+
+Set a maximum size for the set.
+
+```typescript
+const AtMostFive = z.set(z.number()).max(5);
+
+const valid = new Set([1, 2, 3, 4, 5]);
+AtMostFive.parse(valid); // ✓ Valid
+
+const invalid = new Set([1, 2, 3, 4, 5, 6]);
+AtMostFive.parse(invalid); // ✗ Invalid - too many values
+```
+
+**Signature:**
+
+```typescript
+max(maxSize: number, params?: string | ZodCheckMaxSizeParams): this
+```
+
+<ParamField path="maxSize" type="number" required>
+  Maximum number of unique values allowed.
+</ParamField>
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+  
+  ```typescript
+  z.set(z.number()).max(5, 'Cannot exceed 5 unique values')
+  ```
+</ParamField>
+
+### size()
+
+Set an exact size for the set.
+
+```typescript
+const ExactlyThree = z.set(z.boolean()).size(2);
+
+const valid = new Set([true, false]);
+ExactlyThree.parse(valid); // ✓ Valid (booleans can only have 2 unique values)
+
+const invalid = new Set([true]);
+ExactlyThree.parse(invalid); // ✗ Invalid - wrong size
+```
+
+**Signature:**
+
+```typescript
+size(size: number, params?: string | ZodCheckSizeEqualsParams): this
+```
+
+<ParamField path="size" type="number" required>
+  Exact number of unique values required.
+</ParamField>
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+</ParamField>
+
+### nonempty()
+
+Require at least one value (equivalent to `.min(1)`).
+
+```typescript
+const NonEmptySet = z.set(z.string()).nonempty();
+
+const valid = new Set(['item']);
+NonEmptySet.parse(valid); // ✓ Valid
+
+const invalid = new Set();
+NonEmptySet.parse(invalid); // ✗ Invalid - empty set
+```
+
+**Signature:**
+
+```typescript
+nonempty(params?: string | ZodCheckMinSizeParams): this
+```
+
+<ParamField path="params" type="string | object">
+  Optional error message or configuration object.
+</ParamField>
+
+## Complex Value Types
+
+### Object Values
+
+```typescript
+const UserSet = z.set(
+  z.object({
+    id: z.string(),
+    name: z.string(),
+  })
+);
+
+type UserSet = z.infer<typeof UserSet>;
+// Set<{ id: string; name: string }>
+
+// Note: Each object is a unique reference
+const users = new Set();
+const alice = { id: '1', name: 'Alice' };
+const bob = { id: '2', name: 'Bob' };
+users.add(alice);
+users.add(bob);
+users.add(alice); // Same reference - not added again
+
+console.log(users.size); // 2
+UserSet.parse(users); // ✓ Valid
+```
+
+### Enum Values
+
+```typescript
+const Status = z.enum(['pending', 'approved', 'rejected']);
+const StatusSet = z.set(Status);
+
+type StatusSet = z.infer<typeof StatusSet>;
+// Set<"pending" | "approved" | "rejected">
+
+const statuses = new Set(['pending', 'approved']);
+StatusSet.parse(statuses); // ✓ Valid
+```
+
+### Nested Sets
+
+```typescript
+const NestedSet = z.set(z.set(z.number()));
+
+type NestedSet = z.infer<typeof NestedSet>;
+// Set<Set<number>>
+
+const nested = new Set();
+const set1 = new Set([1, 2, 3]);
+const set2 = new Set([4, 5, 6]);
+nested.add(set1);
+nested.add(set2);
+
+NestedSet.parse(nested); // ✓ Valid
+```
+
+## Type Inference
+
+```typescript
+const schema = z.set(z.string().email());
+
+type Output = z.infer<typeof schema>;
+// Set<string>
+
+type Input = z.input<typeof schema>;
+// Set<string>
+```
+
+## Common Patterns
+
+### Tags/Categories
+
+```typescript
+const Tags = z.set(z.string().min(1).max(20));
+
+type Tags = z.infer<typeof Tags>;
+// Set<string>
+
+const articleTags = new Set(['javascript', 'typescript', 'zod']);
+Tags.parse(articleTags); // ✓ Valid
+```
+
+### Unique IDs
+
+```typescript
+const UserIds = z.set(z.string().uuid()).min(1);
+
+type UserIds = z.infer<typeof UserIds>;
+// Set<string>
+
+const ids = new Set([
+  '550e8400-e29b-41d4-a716-446655440000',
+  'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+]);
+
+UserIds.parse(ids); // ✓ Valid
+```
+
+### Permissions
+
+```typescript
+const Permission = z.enum(['read', 'write', 'delete', 'admin']);
+const Permissions = z.set(Permission).min(1);
+
+type Permissions = z.infer<typeof Permissions>;
+// Set<"read" | "write" | "delete" | "admin">
+
+const userPermissions = new Set(['read', 'write']);
+Permissions.parse(userPermissions); // ✓ Valid
+```
+
+### Graph Nodes
+
+```typescript
+const Node = z.object({
+  id: z.string(),
+  neighbors: z.set(z.string()), // Set of neighbor IDs
+});
+
+type Node = z.infer<typeof Node>;
+// { id: string; neighbors: Set<string> }
+
+const node = {
+  id: 'A',
+  neighbors: new Set(['B', 'C', 'D']),
+};
+
+Node.parse(node); // ✓ Valid
+```
+
+## Refinements
+
+Add custom validation:
+
+```typescript
+const NoOverlap = z.object({
+  allowed: z.set(z.string()),
+  blocked: z.set(z.string()),
+}).refine(
+  (data) => {
+    const overlap = new Set(
+      [...data.allowed].filter(x => data.blocked.has(x))
+    );
+    return overlap.size === 0;
+  },
+  'Allowed and blocked sets cannot overlap'
+);
+
+const valid = {
+  allowed: new Set(['read', 'write']),
+  blocked: new Set(['delete', 'admin']),
+};
+NoOverlap.parse(valid); // ✓ Valid
+
+const invalid = {
+  allowed: new Set(['read', 'write']),
+  blocked: new Set(['write', 'delete']), // 'write' in both
+};
+NoOverlap.parse(invalid); // ✗ Invalid - overlap detected
+```
+
+## Set vs Array
+
+| Feature | Set | Array |
+|---------|-----|-------|
+| **Uniqueness** | Automatic | Manual |
+| **Order** | Insertion order (ES6+) | Index-based |
+| **Duplicates** | Not allowed | Allowed |
+| **Lookup** | O(1) average | O(n) |
+| **Use Case** | Unique values | Ordered collection |
+
+```typescript
+// Set - automatic uniqueness
+const setSchema = z.set(z.string());
+const set = new Set(['a', 'b', 'a']); // Automatically becomes ['a', 'b']
+setSchema.parse(set); // ✓ Valid
+
+// Array - manual uniqueness
+const arraySchema = z.array(z.string());
+const array = ['a', 'b', 'a']; // Duplicates preserved
+arraySchema.parse(array); // ✓ Valid - [a, b, a]
+
+// Array with uniqueness validation
+const uniqueArraySchema = z.array(z.string())
+  .refine(
+    arr => new Set(arr).size === arr.length,
+    'Array must contain unique values'
+  );
+
+uniqueArraySchema.parse(['a', 'b', 'a']); // ✗ Invalid - duplicates
+```
+
+## Transformations
+
+Transform set data:
+
+```typescript
+const SetToArray = z.set(z.string())
+  .transform((set) => Array.from(set).sort());
+
+const input = new Set(['charlie', 'alice', 'bob']);
+const result = SetToArray.parse(input);
+// result: ['alice', 'bob', 'charlie']
+
+type Result = z.infer<typeof SetToArray>;
+// string[]
+```
+
+```typescript
+const ArrayToSet = z.array(z.number())
+  .transform((arr) => new Set(arr));
+
+const input = [1, 2, 3, 2, 1]; // Contains duplicates
+const result = ArrayToSet.parse(input);
+// result: Set { 1, 2, 3 }
+
+type Result = z.infer<typeof ArrayToSet>;
+// Set<number>
+```
+
+## Related
+
+- [z.array()](/api/complex/array) - For ordered collections with duplicates
+- [z.map()](/api/complex/map) - For key-value pairs
+- [z.enum()](/api/primitives/enum) - For defining value options

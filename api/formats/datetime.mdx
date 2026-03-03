@@ -1,0 +1,459 @@
+---
+title: ISO Datetime Formats
+description: Validate ISO 8601 datetime formats with z.iso.*
+---
+
+## Overview
+
+Zod provides validators for ISO 8601 datetime formats under the `z.iso` namespace:
+
+- `z.iso.datetime()` - ISO 8601 datetime strings
+- `z.iso.date()` - ISO 8601 date strings (YYYY-MM-DD)
+- `z.iso.time()` - ISO 8601 time strings (HH:MM:SS)
+- `z.iso.duration()` - ISO 8601 duration strings
+
+```typescript
+import { z } from "zod";
+
+const datetimeSchema = z.iso.datetime();
+const dateSchema = z.iso.date();
+const timeSchema = z.iso.time();
+const durationSchema = z.iso.duration();
+```
+
+**Location in source:** `~/workspace/source/packages/zod/src/v4/classic/iso.ts`
+
+## z.iso.datetime()
+
+Validates ISO 8601 datetime strings with various precision and timezone options.
+
+### Basic Usage
+
+```typescript
+const schema = z.iso.datetime();
+
+schema.parse("2022-10-13T09:52:31.816Z"); // ✓ passes
+schema.parse("2020-10-14"); // ✗ throws - missing time
+```
+
+### Valid Examples (Default)
+
+By default, requires UTC timezone indicator (Z):
+
+```typescript
+const schema = z.iso.datetime();
+
+schema.parse("1970-01-01T00:00:00.000Z");
+schema.parse("2022-10-13T09:52:31.816Z");
+schema.parse("2022-10-13T09:52:31.8162314Z"); // variable precision
+schema.parse("1970-01-01T00:00:00Z"); // no milliseconds
+schema.parse("2022-10-13T09:52:31Z");
+```
+
+### Invalid Examples (Default)
+
+```typescript
+const schema = z.iso.datetime();
+
+schema.safeParse("").success; // false - empty
+schema.safeParse("foo").success; // false - not a datetime
+schema.safeParse("2020-10-14").success; // false - date only
+schema.safeParse("T18:45:12.123").success; // false - time only
+schema.safeParse("2020-10-14T17:42:29+00:00").success; // false - offset not allowed (default)
+```
+
+## Precision Options
+
+Control millisecond precision with the `precision` option:
+
+### No Precision Constraint (Default)
+
+Accepts any number of fractional seconds:
+
+```typescript
+const schema = z.iso.datetime(); // precision not specified
+
+schema.parse("2022-10-13T09:52:31Z"); // ✓ no fractional seconds
+schema.parse("2022-10-13T09:52:31.1Z"); // ✓ 1 digit
+schema.parse("2022-10-13T09:52:31.816Z"); // ✓ 3 digits
+schema.parse("2022-10-13T09:52:31.8162314Z"); // ✓ 7 digits
+```
+
+### Precision: -1 (No Fractional Seconds)
+
+Requires no fractional seconds:
+
+```typescript
+const schema = z.iso.datetime({ precision: -1 });
+
+schema.parse("1970-01-01T00:00Z"); // ✓ passes
+schema.parse("2022-10-13T09:52Z"); // ✓ passes
+
+schema.safeParse("1970-01-01T00:00:00.000Z").success; // false
+schema.safeParse("2022-10-13T09:52:31.816Z").success; // false
+```
+
+### Precision: 0 (Seconds Only)
+
+Requires seconds but no fractional part:
+
+```typescript
+const schema = z.iso.datetime({ precision: 0 });
+
+schema.parse("1970-01-01T00:00:00Z"); // ✓ passes
+schema.parse("2022-10-13T09:52:31Z"); // ✓ passes
+
+schema.safeParse("1970-01-01T00:00:00.000Z").success; // false - has fractional
+schema.safeParse("2022-10-13T09:52Z").success; // false - missing seconds
+```
+
+### Precision: 3 (Milliseconds)
+
+Requires exactly 3 digits of fractional seconds:
+
+```typescript
+const schema = z.iso.datetime({ precision: 3 });
+
+schema.parse("1970-01-01T00:00:00.000Z"); // ✓ passes
+schema.parse("2022-10-13T09:52:31.123Z"); // ✓ passes
+
+schema.safeParse("1970-01-01T00:00:00.1Z").success; // false - only 1 digit
+schema.safeParse("1970-01-01T00:00:00.12Z").success; // false - only 2 digits
+schema.safeParse("2022-10-13T09:52:31Z").success; // false - no fractional
+```
+
+### Precision: 4+ (Custom)
+
+Requires exact number of fractional digits:
+
+```typescript
+const schema = z.iso.datetime({ precision: 4 });
+
+schema.parse("1970-01-01T00:00:00.1234Z"); // ✓ passes
+schema.safeParse("1970-01-01T00:00:00.123Z").success; // false - only 3 digits
+```
+
+## Offset Options
+
+Control timezone offset handling with the `offset` option:
+
+### offset: false (Default)
+
+Only accepts UTC timezone (Z):
+
+```typescript
+const schema = z.iso.datetime(); // offset: false by default
+
+schema.parse("2022-10-13T09:52:31.816Z"); // ✓ passes
+schema.safeParse("2020-10-14T17:42:29+00:00").success; // false - offset not allowed
+```
+
+### offset: true
+
+Accepts both UTC (Z) and timezone offsets:
+
+```typescript
+const schema = z.iso.datetime({ offset: true });
+
+schema.parse("1970-01-01T00:00:00.000Z"); // ✓ UTC
+schema.parse("2020-10-14T17:42:29+00:00"); // ✓ offset
+schema.parse("2020-10-14T17:42:29+03:15"); // ✓ custom offset
+schema.parse("2020-10-14T17:42:29-05:00"); // ✓ negative offset
+
+// Invalid offsets
+schema.safeParse("2020-10-14T17:42:29+0315").success; // false - missing colon
+schema.safeParse("2020-10-14T17:42:29+03").success; // false - incomplete
+schema.safeParse("2020-10-14T17:42:29+24:00").success; // false - out of range
+```
+
+## Local Time Option
+
+Allow local time (no timezone indicator) with the `local` option:
+
+### local: false (Default)
+
+Requires timezone indicator:
+
+```typescript
+const schema = z.iso.datetime(); // local: false by default
+
+schema.parse("2022-10-13T09:52:31Z"); // ✓ passes
+schema.safeParse("2022-10-13T09:52:31").success; // false - no timezone
+```
+
+### local: true
+
+Accepts both local time and times with timezone:
+
+```typescript
+const schema = z.iso.datetime({ local: true });
+
+schema.parse("1970-01-01T00:00"); // ✓ local time (HH:MM)
+schema.parse("1970-01-01T00:00:00"); // ✓ local time (HH:MM:SS)
+schema.parse("2022-10-13T09:52:31.816"); // ✓ local with milliseconds
+schema.parse("1970-01-01T00:00:00.000"); // ✓ local with milliseconds
+
+// Still invalid
+schema.safeParse("2022-10-13 09:52:31").success; // false - space instead of T
+schema.safeParse("2022-10-13T24:52:31").success; // false - invalid hour
+```
+
+### Combining local and offset
+
+```typescript
+const schema = z.iso.datetime({ local: true, offset: true });
+
+schema.parse("2022-10-13T12:52:00"); // ✓ local time
+schema.parse("2022-10-13T12:52:00Z"); // ✓ UTC
+schema.parse("2022-10-13T12:52+02:00"); // ✓ with offset
+```
+
+## z.iso.date()
+
+Validates ISO 8601 date strings in YYYY-MM-DD format.
+
+### Basic Usage
+
+```typescript
+const schema = z.iso.date();
+
+schema.parse("2022-10-31"); // ✓ passes
+schema.parse("2022-10-14T17:42:29Z"); // ✗ throws - includes time
+```
+
+### Valid Examples
+
+```typescript
+const schema = z.iso.date();
+
+schema.parse("1970-01-01");
+schema.parse("2022-01-31");
+schema.parse("2022-12-31");
+schema.parse("2000-02-29"); // leap year
+schema.parse("2400-02-29"); // leap year
+```
+
+### Invalid Examples
+
+```typescript
+const schema = z.iso.date();
+
+// Wrong format
+schema.safeParse("").success; // false
+schema.safeParse("foo").success; // false
+schema.safeParse("200-01-01").success; // false - year too short
+schema.safeParse("20000-01-01").success; // false - year too long
+schema.safeParse("2000-0-01").success; // false - month too short
+schema.safeParse("2000-01-0").success; // false - day too short
+schema.safeParse("2000/01/01").success; // false - wrong separator
+schema.safeParse("01-01-2022").success; // false - wrong order
+
+// Invalid dates
+schema.safeParse("2000-00-12").success; // false - month 0
+schema.safeParse("2000-12-00").success; // false - day 0
+schema.safeParse("2000-01-32").success; // false - day 32
+schema.safeParse("2000-13-01").success; // false - month 13
+schema.safeParse("2022-02-29").success; // false - not a leap year
+schema.safeParse("2000-04-31").success; // false - April has 30 days
+
+// Contains time
+schema.safeParse("2020-10-14T17:42:29Z").success; // false
+```
+
+## z.iso.time()
+
+Validates ISO 8601 time strings (HH:MM:SS).
+
+### Basic Usage
+
+```typescript
+const schema = z.iso.time();
+
+schema.parse("09:52:31"); // ✓ passes
+schema.parse("T18:45:12.123"); // ✗ throws - has T prefix
+```
+
+### Valid Examples
+
+```typescript
+const schema = z.iso.time();
+
+schema.parse("00:00:00");
+schema.parse("23:00:00");
+schema.parse("00:59:00");
+schema.parse("00:00:59");
+schema.parse("23:59:59");
+schema.parse("09:52:31");
+schema.parse("23:59:59.9999999"); // with fractional seconds
+```
+
+### Precision Option
+
+Similar to datetime, you can specify precision:
+
+```typescript
+const schema = z.iso.time({ precision: 3 });
+
+schema.parse("09:52:31.123"); // ✓ exactly 3 digits
+schema.safeParse("09:52:31").success; // false - no fractional
+schema.safeParse("09:52:31.12").success; // false - only 2 digits
+```
+
+## z.iso.duration()
+
+Validates ISO 8601 duration strings.
+
+### Basic Usage
+
+```typescript
+const schema = z.iso.duration();
+
+schema.parse("P1Y2M3DT4H5M6S"); // ✓ passes
+```
+
+### Valid Examples
+
+```typescript
+const schema = z.iso.duration();
+
+schema.parse("P1Y"); // 1 year
+schema.parse("P3Y6M4DT12H30M5S"); // 3 years, 6 months, 4 days, 12 hours, 30 minutes, 5 seconds
+schema.parse("P23DT23H"); // 23 days, 23 hours
+schema.parse("PT36H"); // 36 hours
+schema.parse("P1W"); // 1 week
+```
+
+## Parameters
+
+All ISO datetime functions accept optional parameters:
+
+```typescript
+z.iso.datetime(params?: DateTimeParams)
+z.iso.date(params?: string | DateParams)
+z.iso.time(params?: TimeParams)
+z.iso.duration(params?: string | DurationParams)
+```
+
+### DateTimeParams
+
+```typescript
+{
+  precision?: number | null; // -1, 0, 3, etc.
+  offset?: boolean;          // allow timezone offsets
+  local?: boolean;           // allow local time
+  message?: string;          // custom error message
+}
+```
+
+### TimeParams
+
+```typescript
+{
+  precision?: number | null; // fractional seconds precision
+  message?: string;          // custom error message
+}
+```
+
+## Examples
+
+### API Timestamp Validation
+
+```typescript
+const eventSchema = z.object({
+  id: z.uuid(),
+  timestamp: z.iso.datetime(),
+  type: z.string(),
+});
+
+eventSchema.parse({
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  timestamp: "2022-10-13T09:52:31.816Z",
+  type: "user.created"
+}); // ✓ passes
+```
+
+### Flexible Timezone Handling
+
+```typescript
+const schema = z.object({
+  createdAt: z.iso.datetime({ offset: true }),
+  updatedAt: z.iso.datetime({ local: true, offset: true }),
+});
+
+schema.parse({
+  createdAt: "2022-10-13T09:52:31.816Z",
+  updatedAt: "2022-10-14T10:30:00" // local time allowed
+}); // ✓ passes
+```
+
+### Date Range Validation
+
+```typescript
+const dateRangeSchema = z.object({
+  startDate: z.iso.date(),
+  endDate: z.iso.date(),
+}).refine(
+  (data) => data.startDate <= data.endDate,
+  "End date must be after start date"
+);
+
+dateRangeSchema.parse({
+  startDate: "2022-01-01",
+  endDate: "2022-12-31"
+}); // ✓ passes
+```
+
+### Schedule with Time
+
+```typescript
+const scheduleSchema = z.object({
+  date: z.iso.date(),
+  startTime: z.iso.time(),
+  endTime: z.iso.time(),
+  duration: z.iso.duration().optional(),
+});
+
+scheduleSchema.parse({
+  date: "2022-10-14",
+  startTime: "09:00:00",
+  endTime: "17:00:00",
+  duration: "PT8H"
+}); // ✓ passes
+```
+
+### High-Precision Timestamps
+
+```typescript
+const highPrecisionSchema = z.object({
+  timestamp: z.iso.datetime({ precision: 6 }),
+  measuredValue: z.number(),
+});
+
+highPrecisionSchema.parse({
+  timestamp: "2022-10-13T09:52:31.816234Z",
+  measuredValue: 42.5
+}); // ✓ passes
+```
+
+## Return Type
+
+All ISO datetime schemas return strings:
+
+```typescript
+type Output = string;
+type Input = string;
+```
+
+<Note>
+  The ISO datetime validators perform format validation only. They do not parse the string into a Date object or validate that the date is semantically valid (e.g., they accept "2022-02-30" on some validators). For full date validation including semantic checks, combine with additional refinements or use `z.date()` with coercion.
+</Note>
+
+<Warning>
+  When using `local: true`, be aware that the datetime string does not contain timezone information. This can lead to ambiguity when the string is parsed in different timezones. For unambiguous timestamps, prefer using UTC (Z) or explicit offsets.
+</Warning>
+
+## Related Methods
+
+- [z.date()](/api/primitives/date) - Date object validation
+- [z.string()](/api/primitives/string) - Base string validation
+- [z.coerce.date()](/api/coercion) - String to Date coercion

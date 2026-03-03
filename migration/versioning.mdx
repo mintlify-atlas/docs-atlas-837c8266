@@ -1,0 +1,232 @@
+---
+title: Versioning Strategy
+description: Versioning strategy and compatibility information for Zod 4
+---
+
+## Current Status
+
+### Update — July 8th, 2025
+
+`zod@4.0.0` has been published to `npm`. The package root (`"zod"`) now exports Zod 4. All other subpaths have not changed and will remain available forever.
+
+To upgrade to Zod 4:
+
+```bash
+npm install zod@^4.0.0
+```
+
+If you are using Zod 4, your existing imports (`"zod/v4"` and `"zod/v4-mini"`) will continue to work forever. However, after upgrading, you can **optionally** rewrite your imports as follows:
+
+| Package | Before | After |
+|---------|--------|-------|
+| Zod 4 | `"zod/v4"` | `"zod"` |
+| Zod 4 Mini | `"zod/v4-mini"` | `"zod/mini"` |
+| Zod 3 | `"zod"` | `"zod/v3"` |
+
+### For Library Authors
+
+If you've already implemented Zod 4 support according to the best practices outlined in the Library authors guide, bump your peer dependency to include `zod@^4.0.0`:
+
+```json
+// package.json
+{
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
+  }
+}
+```
+
+**There should be no other code changes necessary.** No code changes were made between the latest `3.25.x` release and `4.0.0`. This does not require a major version bump.
+
+<Accordion title="Some notes on subpath versioning">
+
+Ultimately, the subpath versioning scheme was a necessary evil to force the ecosystem to upgrade in a non-breaking way. If I'd published `zod@4.0.0` out of the gate, most libraries would have naively bumped their peer dependencies, forcing a "version bump avalanche" across the ecosystem.
+
+As it stands, there is now broad support for Zod 4 across the ecosystem. No migration process is totally painless, but it seems like the "version avalanche" I'd feared didn't happen. By and large, libraries have been able to support Zod 3 and Zod 4 simultaneously: Hono, LangChain, React Hook Form, etc. Several ecosystem maintainers reached out to me specifically to indicate how convenient it was to incrementally add support for Zod 4 (something that would typically require a major version bump). Long story short: this approach worked great! Few other libraries are subject to the same constraints as Zod, but I strongly encourage other libraries with large associated ecosystems to consider a similar approach.
+
+</Accordion>
+
+## Versioning Approach
+
+This is a writeup of Zod 4's approach to versioning, with the goal of making it easier for users and Zod's ecosystem of associated libraries to migrate to Zod 4.
+
+### The Strategy
+
+The general approach:
+
+- Zod 4 was not initially published as `zod@4.0.0` on npm. Instead it was exported at a subpath (`"zod/v4"`) alongside `zod@3.25.0`
+- Despite this, Zod 4 is considered stable and production-ready
+- Zod 3 continues to be exported from the package root (`"zod"`) as well as a new subpath `"zod/v3"`. It continues to receive bug fixes & stability improvements.
+
+<Note>
+This approach is analogous to how Golang handles major version changes: https://go.dev/doc/modules/major-version
+</Note>
+
+Sometime later:
+
+- The package root (`"zod"`) switched over from exporting Zod 3 to Zod 4
+- At this point `zod@4.0.0` was published to npm
+- The `"zod/v4"` subpath remains available forever
+
+## Why This Approach?
+
+Zod occupies a unique place in the ecosystem. Many libraries/frameworks in the ecosystem accept user-defined Zod schemas. This means their user-facing API is strongly coupled to Zod and its various classes/interfaces/utilities. For these libraries/frameworks, a breaking change to Zod necessarily causes a breaking change for their users. A Zod 3 `ZodType` is not assignable to a Zod 4 `ZodType`.
+
+### The Problem with Traditional Versioning
+
+If Zod had naively published `zod@4.0.0` to npm, the vast majority of the libraries in Zod's ecosystem would need to publish a new major version to properly support Zod 4. This includes high-profile libraries like the AI SDK. It would trigger a "version bump avalanche" across the ecosystem and generally create a huge amount of frustration and work.
+
+### Why can't libraries just support v3 and v4 simultaneously?
+
+Unfortunately the limitations of peerDependencies (and inconsistencies between package managers) make it extremely difficult to elegantly support two major versions of one library simultaneously.
+
+Here are the options available to libraries trying to support both versions:
+
+1. **Install both as dependencies with npm aliases** - Works but you end up including your own copies of both Zod 3 and Zod 4. You have no guarantee that your user's Zod schemas are instances of the same `z.ZodType` class you're pulling from dependencies (`instanceof` checks will probably fail).
+
+2. **Use a peer dependency spanning multiple major versions** (`"zod@>=3.0.0"`) - When developing a library you'd still need to pick a version to develop against. The onus is on you to ensure your code works across both versions. This is impossible in the case of Zod 3 & Zod 4 because fundamental classes have simplified/different generics.
+
+3. **Optional peer dependencies** - No reliable way to determine which peer dep is installed at runtime across all platforms. Dynamic imports in try/catch don't work with frontend bundlers. Additionally, versions of npm as recent as v10 cannot handle the combination of peer dependencies + npm aliases.
+
+4. **`zod-compat` pattern** - Define interfaces for each version representing basic functionality. This is error prone, requires tons of work, needs to be kept synchronized with real implementations, and only works for types (not runtime code).
+
+## The Solution: Subpath Versioning
+
+With subpath versioning, we solve this problem. It provides a straightforward way for libraries to support Zod 3 and Zod 4 (including Zod Mini) simultaneously. They can continue defining a single peerDependency on `"zod"`; no need for more arcane solutions like npm aliases, optional peer dependencies, a `"zod-compat"` package, or other such hacks.
+
+Libraries need to bump the minimum version of their `"zod"` peer dependency to `zod@^3.25.0`. They can then reference both Zod 3 and Zod 4 in their implementation:
+
+```ts
+import * as z3 from "zod/v3"
+import * as z4 from "zod/v4"
+```
+
+Later, once there's broad support for v4, the major version on `npm` was bumped and Zod 4 is now exported from the package root, completing the transition.
+
+As long as libraries are importing exclusively from the associated subpaths (not the root), their implementations continue to work across the major version bump without code changes.
+
+While it may seem unorthodox (at least for people who don't use Go!), this is the only approach that enables a clean, incremental migration path for both Zod's users and the libraries in the broader ecosystem.
+
+## Import Paths Reference
+
+### After zod@4.0.0 Release
+
+```ts
+// Zod 4 (recommended)
+import * as z from "zod";
+
+// Zod 4 (legacy subpath, still supported)
+import * as z from "zod/v4";
+
+// Zod 4 Mini (recommended)
+import * as z from "zod/mini";
+
+// Zod 4 Mini (legacy subpath, still supported)
+import * as z from "zod/v4-mini";
+
+// Zod 3 (for backwards compatibility)
+import * as z from "zod/v3";
+
+// Zod Core utilities
+import * as z from "zod/v4/core";
+```
+
+### Before zod@4.0.0 Release
+
+```ts
+// Zod 4
+import * as z from "zod/v4";
+
+// Zod 4 Mini
+import * as z from "zod/v4-mini";
+
+// Zod 3 (default)
+import * as z from "zod";
+
+// Zod 3 (explicit subpath)
+import * as z from "zod/v3";
+```
+
+## Compatibility Matrix
+
+| Zod Version | Package Root Export | Subpath Available | Status |
+|-------------|-------------------|-------------------|--------|
+| Zod 3 | `"zod"` (before 4.0.0) | `"zod/v3"` | Stable, receiving bug fixes |
+| Zod 4 | `"zod"` (after 4.0.0) | `"zod/v4"` | Stable, recommended |
+| Zod 4 Mini | N/A | `"zod/mini"`, `"zod/v4-mini"` | Stable |
+
+## Migration Timeline
+
+1. **Phase 1: Initial Release** (Completed)
+   - Zod 4 released as `zod@3.25.0` with `"zod/v4"` subpath
+   - Zod 3 remains at package root
+   - Ecosystem begins adding Zod 4 support
+
+2. **Phase 2: Ecosystem Migration** (Completed)
+   - Libraries add support for both Zod 3 and Zod 4
+   - Users begin migrating to Zod 4 using `"zod/v4"` imports
+   - Broad ecosystem support achieved
+
+3. **Phase 3: Major Version Bump** (Current)
+   - `zod@4.0.0` published to npm
+   - Package root now exports Zod 4
+   - All subpaths remain available
+   - Users can optionally update imports
+
+4. **Phase 4: Long-term Support**
+   - All subpaths continue to work indefinitely
+   - Zod 3 receives security and critical bug fixes
+   - Zod 4 is the recommended version for new projects
+
+## Recommendations
+
+### For Application Developers
+
+- **New projects**: Use `zod@^4.0.0` and import from `"zod"`
+- **Existing Zod 3 projects**: Migrate when ready using the [v4 changelog](/migration/v4-changelog)
+- **Gradual migration**: Use `"zod/v3"` and `"zod/v4"` subpaths to migrate incrementally
+
+### For Library Authors
+
+- **Support both versions**: Set peer dependency to `"zod": "^3.25.0 || ^4.0.0"`
+- **Use subpath imports**: Import from `"zod/v3"` and `"zod/v4"` to support both
+- **Avoid breaking changes**: Your library doesn't need a major version bump to support Zod 4
+- **Test against both versions**: Ensure your library works with both Zod 3 and Zod 4
+
+## FAQ
+
+<Accordion title="Will the zod/v4 subpath be removed?">
+
+No. All subpaths (`"zod/v3"`, `"zod/v4"`, `"zod/mini"`, `"zod/v4-mini"`) will remain available indefinitely.
+
+</Accordion>
+
+<Accordion title="Do I need to update my imports after upgrading to zod@4.0.0?">
+
+No, updating imports is optional. If you were using `"zod/v4"`, it will continue to work. You can optionally change to `"zod"` for cleaner imports.
+
+</Accordion>
+
+<Accordion title="Can I use Zod 3 and Zod 4 in the same project?">
+
+Yes! You can import from both `"zod/v3"` and `"zod/v4"` simultaneously. This is especially useful for gradual migrations.
+
+</Accordion>
+
+<Accordion title="What if my dependency still uses Zod 3?">
+
+This is fine. With `zod@^4.0.0` installed, both `"zod/v3"` and `"zod"` (which exports Zod 4) are available. Your dependency will continue to work.
+
+</Accordion>
+
+<Accordion title="Does my library need a major version bump to support Zod 4?">
+
+No! That's the whole point of this versioning strategy. By supporting both `"zod/v3"` and `"zod/v4"` subpaths, your library can support both versions without a breaking change.
+
+</Accordion>
+
+<Accordion title="Is Zod 4 production-ready?">
+
+Yes, Zod 4 has been stable and production-ready since its initial release as `zod@3.25.0`. It's widely used across the ecosystem.
+
+</Accordion>

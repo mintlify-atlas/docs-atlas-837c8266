@@ -1,0 +1,491 @@
+---
+title: 'z.object()'
+description: 'Define object schemas with shape, extend, merge, pick, omit, and more'
+---
+
+## Basic Usage
+
+Create an object schema by defining the shape of its properties.
+
+```typescript
+import { z } from 'zod';
+
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number().optional(),
+});
+
+type User = z.infer<typeof UserSchema>;
+// { id: string; name: string; email: string; age?: number }
+```
+
+## Signature
+
+```typescript
+function object<T extends ZodLooseShape>(
+  shape?: T,
+  params?: string | ZodObjectParams
+): ZodObject<T, ZodStrip>
+```
+
+<ParamField path="shape" type="object">
+  An object where each key maps to a Zod schema. Defines the structure of the object.
+</ParamField>
+
+<ParamField path="params" type="string | ZodObjectParams">
+  Optional error message (string) or configuration object.
+</ParamField>
+
+## Properties
+
+<ParamField path="shape" type="object">
+  Access the object's shape definition.
+  
+  ```typescript
+  const schema = z.object({ name: z.string() });
+  schema.shape.name; // ZodString
+  ```
+</ParamField>
+
+## Methods
+
+### extend()
+
+Add new properties to an object schema or override existing ones.
+
+```typescript
+const BaseUser = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
+const ExtendedUser = BaseUser.extend({
+  email: z.string().email(),
+  createdAt: z.date(),
+});
+
+type ExtendedUser = z.infer<typeof ExtendedUser>;
+// { id: string; name: string; email: string; createdAt: Date }
+```
+
+<Note>
+When extending an object with refinements, you can only add new properties. Use `.safeExtend()` to override existing properties.
+</Note>
+
+**Signature:**
+
+```typescript
+extend<U extends ZodLooseShape>(shape: U): ZodObject<Extend<Shape, U>, Config>
+```
+
+<ParamField path="shape" type="object" required>
+  Object containing additional properties to add or override.
+</ParamField>
+
+### safeExtend()
+
+Safely extend an object schema, allowing property overrides even with refinements.
+
+```typescript
+const schema = z.object({
+  id: z.string(),
+  name: z.string(),
+}).refine(data => data.id.length > 0);
+
+const extended = schema.safeExtend({
+  name: z.string().min(3), // Override allowed with safeExtend
+  email: z.string().email(),
+});
+```
+
+**Signature:**
+
+```typescript
+safeExtend<U extends ZodLooseShape>(
+  shape: SafeExtendShape<Shape, U> & Partial<Record<keyof Shape, SomeType>>
+): ZodObject<Extend<Shape, U>, Config>
+```
+
+### merge()
+
+<Warning>
+Deprecated. Use `A.extend(B.shape)` instead.
+</Warning>
+
+Merge two object schemas together.
+
+```typescript
+const NameSchema = z.object({ name: z.string() });
+const AgeSchema = z.object({ age: z.number() });
+
+// Deprecated approach
+const PersonSchema = NameSchema.merge(AgeSchema);
+
+// Recommended approach
+const PersonSchema = NameSchema.extend(AgeSchema.shape);
+```
+
+**Signature:**
+
+```typescript
+merge<U extends ZodObject>(
+  other: U
+): ZodObject<Extend<Shape, U['shape']>, U['_zod']['config']>
+```
+
+### pick()
+
+Create a new schema with only the specified properties.
+
+```typescript
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  password: z.string(),
+});
+
+const PublicUserSchema = UserSchema.pick({
+  id: true,
+  name: true,
+  email: true,
+});
+
+type PublicUser = z.infer<typeof PublicUserSchema>;
+// { id: string; name: string; email: string }
+```
+
+<Warning>
+Cannot be used on object schemas containing refinements. The refinements would apply to the full object, not the picked subset.
+</Warning>
+
+**Signature:**
+
+```typescript
+pick<M extends Mask<keyof Shape>>(
+  mask: M & Record<Exclude<keyof M, keyof Shape>, never>
+): ZodObject<Flatten<Pick<Shape, Extract<keyof Shape, keyof M>>>, Config>
+```
+
+<ParamField path="mask" type="object" required>
+  Object with keys to pick. Set values to `true` to include, `false` to exclude.
+</ParamField>
+
+### omit()
+
+Create a new schema excluding the specified properties.
+
+```typescript
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  password: z.string(),
+});
+
+const UserWithoutPassword = UserSchema.omit({
+  password: true,
+});
+
+type SafeUser = z.infer<typeof UserWithoutPassword>;
+// { id: string; name: string; email: string }
+```
+
+<Warning>
+Cannot be used on object schemas containing refinements.
+</Warning>
+
+**Signature:**
+
+```typescript
+omit<M extends Mask<keyof Shape>>(
+  mask: M & Record<Exclude<keyof M, keyof Shape>, never>
+): ZodObject<Flatten<Omit<Shape, Extract<keyof Shape, keyof M>>>, Config>
+```
+
+<ParamField path="mask" type="object" required>
+  Object with keys to omit. Set values to `true` to exclude, `false` to include.
+</ParamField>
+
+### partial()
+
+Make all properties optional.
+
+```typescript
+const UserSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+});
+
+const PartialUserSchema = UserSchema.partial();
+
+type PartialUser = z.infer<typeof PartialUserSchema>;
+// { name?: string; email?: string }
+```
+
+You can also make specific properties optional:
+
+```typescript
+const PartiallyOptional = UserSchema.partial({
+  email: true,
+});
+
+type PartiallyOptional = z.infer<typeof PartiallyOptional>;
+// { name: string; email?: string }
+```
+
+**Signature:**
+
+```typescript
+partial(): ZodObject<{ [k in keyof Shape]: ZodOptional<Shape[k]> }, Config>
+
+partial<M extends Mask<keyof Shape>>(
+  mask: M & Record<Exclude<keyof M, keyof Shape>, never>
+): ZodObject<{
+  [k in keyof Shape]: k extends keyof M ? ZodOptional<Shape[k]> : Shape[k]
+}, Config>
+```
+
+<ParamField path="mask" type="object">
+  Optional object specifying which keys to make optional.
+</ParamField>
+
+### required()
+
+Make all properties required (remove optionality).
+
+```typescript
+const OptionalUserSchema = z.object({
+  name: z.string().optional(),
+  email: z.string().optional(),
+});
+
+const RequiredUserSchema = OptionalUserSchema.required();
+
+type RequiredUser = z.infer<typeof RequiredUserSchema>;
+// { name: string; email: string }
+```
+
+You can also make specific properties required:
+
+```typescript
+const PartiallyRequired = OptionalUserSchema.required({
+  name: true,
+});
+
+type PartiallyRequired = z.infer<typeof PartiallyRequired>;
+// { name: string; email?: string }
+```
+
+**Signature:**
+
+```typescript
+required(): ZodObject<{ [k in keyof Shape]: ZodNonOptional<Shape[k]> }, Config>
+
+required<M extends Mask<keyof Shape>>(
+  mask: M & Record<Exclude<keyof M, keyof Shape>, never>
+): ZodObject<{
+  [k in keyof Shape]: k extends keyof M ? ZodNonOptional<Shape[k]> : Shape[k]
+}, Config>
+```
+
+<ParamField path="mask" type="object">
+  Optional object specifying which keys to make required.
+</ParamField>
+
+### keyof()
+
+Extract the keys of an object schema as an enum.
+
+```typescript
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+});
+
+const UserKey = UserSchema.keyof();
+
+type UserKey = z.infer<typeof UserKey>;
+// "id" | "name" | "email"
+```
+
+**Signature:**
+
+```typescript
+keyof(): ZodEnum<ToEnum<keyof Shape & string>>
+```
+
+### catchall()
+
+Define a schema to validate all unrecognized keys.
+
+```typescript
+const FlexibleConfig = z.object({
+  host: z.string(),
+  port: z.number(),
+}).catchall(z.string());
+
+FlexibleConfig.parse({
+  host: 'localhost',
+  port: 3000,
+  debug: 'true',      // Validated as string
+  timeout: '5000',    // Validated as string
+}); // ✓ Valid
+
+FlexibleConfig.parse({
+  host: 'localhost',
+  port: 3000,
+  maxConnections: 100, // ✗ Invalid - not a string
+});
+```
+
+**Signature:**
+
+```typescript
+catchall<T extends SomeType>(schema: T): ZodObject<Shape, ZodCatchall<T>>
+```
+
+<ParamField path="schema" type="ZodType" required>
+  Schema to validate unrecognized keys against.
+</ParamField>
+
+### passthrough()
+
+<Warning>
+Deprecated. Use `.loose()` or `z.looseObject()` instead.
+</Warning>
+
+Allow unrecognized keys to pass through without validation.
+
+```typescript
+const schema = z.object({ name: z.string() }).passthrough();
+```
+
+### loose()
+
+Allow unrecognized keys without validation (replaces `.passthrough()`).
+
+```typescript
+const schema = z.object({
+  id: z.string(),
+}).loose();
+
+schema.parse({ id: '123', extra: 'value' }); // ✓ Valid
+```
+
+**Signature:**
+
+```typescript
+loose(): ZodObject<Shape, ZodLoose>
+```
+
+### strict()
+
+Disallow unrecognized keys (fail validation).
+
+```typescript
+const StrictUser = z.object({
+  id: z.string(),
+  name: z.string(),
+}).strict();
+
+StrictUser.parse({ id: '123', name: 'Alice' }); // ✓ Valid
+
+StrictUser.parse({
+  id: '123',
+  name: 'Alice',
+  email: 'alice@example.com', // ✗ Invalid - unrecognized key
+});
+```
+
+**Signature:**
+
+```typescript
+strict(): ZodObject<Shape, ZodStrict>
+```
+
+### strip()
+
+Remove unrecognized keys (default behavior).
+
+```typescript
+const schema = z.object({
+  name: z.string(),
+}).strip();
+
+const result = schema.parse({
+  name: 'Alice',
+  extra: 'removed',
+});
+// result: { name: 'Alice' }
+```
+
+**Signature:**
+
+```typescript
+strip(): ZodObject<Shape, ZodStrip>
+```
+
+## Object Variants
+
+### z.strictObject()
+
+Create a strict object schema that rejects unrecognized keys.
+
+```typescript
+const schema = z.strictObject({
+  id: z.string(),
+  name: z.string(),
+});
+
+// Equivalent to:
+const schema = z.object({ id: z.string(), name: z.string() }).strict();
+```
+
+### z.looseObject()
+
+Create a loose object schema that allows unrecognized keys.
+
+```typescript
+const schema = z.looseObject({
+  id: z.string(),
+});
+
+// Equivalent to:
+const schema = z.object({ id: z.string() }).loose();
+```
+
+## Type Inference
+
+```typescript
+const UserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number().optional(),
+  tags: z.array(z.string()),
+});
+
+type User = z.infer<typeof UserSchema>;
+/*
+{
+  id: string;
+  name: string;
+  email: string;
+  age?: number;
+  tags: string[];
+}
+*/
+
+type UserInput = z.input<typeof UserSchema>;
+// Same as output for object schemas without transformations
+```
+
+## Related
+
+- [z.record()](/api/complex/record) - For dynamic key-value objects
+- [z.intersection()](/api/complex/intersection) - For combining schemas
+- [z.union()](/api/complex/union) - For alternative schemas

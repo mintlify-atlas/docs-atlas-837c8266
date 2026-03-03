@@ -1,0 +1,146 @@
+---
+title: .nullable() and .nullish()
+description: Make schemas accept null values
+---
+
+## .nullable()
+
+Makes a schema accept `null` in addition to its base type.
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.string().nullable();
+
+schema.parse('hello');     // 'hello'
+schema.parse(null);        // null
+schema.parse(undefined);   // throws error
+```
+
+### Type Inference
+
+The `.nullable()` modifier affects both input and output types:
+
+```typescript
+const schema = z.string().nullable();
+
+type Input = z.input<typeof schema>;   // string | null
+type Output = z.output<typeof schema>; // string | null
+```
+
+### Unwrapping
+
+You can remove the nullable wrapper using `.unwrap()`:
+
+```typescript
+const nullable = z.string().nullable();
+const base = nullable.unwrap(); // ZodString
+```
+
+### In Object Schemas
+
+```typescript
+const User = z.object({
+  name: z.string(),
+  middleName: z.string().nullable(),
+});
+
+User.parse({
+  name: 'John',
+  middleName: null,        // Valid
+});
+
+User.parse({
+  name: 'John',
+  middleName: 'Robert',    // Valid
+});
+
+User.parse({
+  name: 'John',
+  // middleName is required, cannot be omitted
+}); // throws error
+```
+
+<Warning>
+`.nullable()` does not make a field optional in objects. The field must still be present, but can be `null`.
+</Warning>
+
+## .nullish()
+
+A convenience method that combines `.optional()` and `.nullable()`, making a schema accept `null`, `undefined`, or the base type.
+
+```typescript
+const schema = z.string().nullish();
+
+// Equivalent to:
+const equivalent = z.string().nullable().optional();
+
+schema.parse('hello');     // 'hello'
+schema.parse(null);        // null
+schema.parse(undefined);   // undefined
+```
+
+### Type Inference
+
+```typescript
+const schema = z.string().nullish();
+
+type Input = z.input<typeof schema>;   // string | null | undefined
+type Output = z.output<typeof schema>; // string | null | undefined
+```
+
+### In Object Schemas
+
+```typescript
+const User = z.object({
+  name: z.string(),
+  nickname: z.string().nullish(),
+});
+
+User.parse({ name: 'John' });                       // Valid - nickname omitted
+User.parse({ name: 'John', nickname: undefined });  // Valid
+User.parse({ name: 'John', nickname: null });       // Valid
+User.parse({ name: 'John', nickname: 'Johnny' });   // Valid
+```
+
+### Use Cases
+
+- **`.nullable()`**: Use for database fields that can be NULL but must be present
+- **`.nullish()`**: Use for optional fields that could also be explicitly set to null
+
+### Chaining Examples
+
+```typescript
+// Nullable with default
+const schema1 = z.string().nullable().default('hello');
+schema1.parse(undefined); // 'hello'
+schema1.parse(null);      // null (default not applied to null)
+
+// Nullable with catch
+const schema2 = z.string().nullable().catch('fallback');
+schema2.parse(123);       // 'fallback' (invalid input)
+schema2.parse(null);      // null (valid input)
+
+// Nullish with refinement
+const schema3 = z.string()
+  .nullish()
+  .refine(val => val !== null, 'Cannot be null');
+
+schema3.parse(undefined);  // undefined (valid)
+schema3.parse('hello');    // 'hello' (valid)
+schema3.parse(null);       // throws error
+```
+
+### Implementation Note
+
+```typescript
+// .nullish() is implemented as:
+.nullish() {
+  return this.nullable().optional();
+}
+
+// This means it creates a nested structure:
+z.string().nullish()
+// Is equivalent to:
+z.optional(z.nullable(z.string()))
+```

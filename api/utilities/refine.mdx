@@ -1,0 +1,581 @@
+---
+title: '.refine() & .superRefine()'
+description: 'Custom validation logic for complex validation rules'
+---
+
+## Overview
+
+Zod provides two methods for custom validation:
+
+- **`.refine()`** - Simple custom validation with a boolean check
+- **`.superRefine()`** - Advanced validation with full control over error messages and multiple issues
+
+Both methods run after the base schema validation succeeds.
+
+## .refine()
+
+Add custom validation logic with a simple check function.
+
+### Signature
+
+```typescript
+schema.refine(
+  (data) => boolean | Promise<boolean>,
+  options?
+)
+```
+
+<ParamField path="check" type="(data) => boolean | Promise<boolean>" required>
+  Function that returns `true` if validation passes, `false` if it fails
+</ParamField>
+
+<ParamField path="options" type="string | RefinementOptions" optional>
+  Error message string or options object
+</ParamField>
+
+**Returns:** The schema with refinement applied
+
+### Basic Usage
+
+```typescript
+const schema = z.object({
+  password: z.string(),
+  confirmPassword: z.string(),
+}).refine(
+  (data) => data.password === data.confirmPassword,
+  "Passwords must match"
+);
+
+schema.parse({
+  password: "password123",
+  confirmPassword: "password123"
+}); // ✅ Valid
+
+schema.parse({
+  password: "password123",
+  confirmPassword: "different"
+}); // ❌ Error: "Passwords must match"
+```
+
+### Custom Error Paths
+
+Specify which field the error applies to:
+
+```typescript
+const schema = z.object({
+  password: z.string(),
+  confirm: z.string(),
+}).refine(
+  (data) => data.confirm === data.password,
+  {
+    message: "Passwords must match",
+    path: ["confirm"],  // Error appears on confirm field
+  }
+);
+
+const result = schema.safeParse({
+  password: "pass123",
+  confirm: "different"
+});
+
+if (!result.success) {
+  console.log(result.error.issues[0].path);
+  // ["confirm"]
+}
+```
+
+### Async Refinements
+
+```typescript
+const schema = z.string().email().refine(
+  async (email) => {
+    const exists = await checkEmailExists(email);
+    return !exists;
+  },
+  "Email is already taken"
+);
+
+// Must use async parsing
+const result = await schema.safeParseAsync("user@example.com");
+```
+
+## .superRefine()
+
+Advanced validation with full control over error reporting.
+
+### Signature
+
+```typescript
+schema.superRefine(
+  (data, ctx) => void | Promise<void>
+)
+```
+
+<ParamField path="data" type="Output" required>
+  The validated data
+</ParamField>
+
+<ParamField path="ctx" type="RefinementCtx" required>
+  Context object with `addIssue()` method
+</ParamField>
+
+**Returns:** The schema with refinement applied
+
+### Basic Usage
+
+```typescript
+const schema = z.array(z.string()).superRefine((val, ctx) => {
+  if (val.length > 3) {
+    ctx.addIssue({
+      code: "too_big",
+      maximum: 3,
+      inclusive: true,
+      message: "Too many items",
+    });
+  }
+
+  if (val.length !== new Set(val).size) {
+    ctx.addIssue({
+      code: "custom",
+      message: "No duplicates allowed",
+    });
+  }
+});
+
+const result = schema.safeParse(["a", "a", "b", "c"]);
+// Two errors:
+// - "Too many items"
+// - "No duplicates allowed"
+```
+
+### Adding Issues
+
+The `ctx.addIssue()` method accepts several forms:
+
+#### Full Issue Object
+
+```typescript
+schema.superRefine((data, ctx) => {
+  ctx.addIssue({
+    code: "custom",
+    message: "Validation failed",
+    path: ["fieldName"],     // Optional: specific field
+    fatal: true,             // Optional: stop validation
+    continue: false,         // Optional: don't run next checks
+  });
+});
+```
+
+#### String Shorthand
+
+```typescript
+schema.superRefine((data, ctx) => {
+  ctx.addIssue("Something went wrong");
+});
+```
+
+## Refinement Options
+
+### Error Messages
+
+```typescript
+// Simple string message
+schema.refine((val) => val.length > 0, "Cannot be empty");
+
+// Message in options
+schema.refine(
+  (val) => val.length > 0,
+  { message: "Cannot be empty" }
+);
+```
+
+### Error Paths
+
+```typescript
+const schema = z.object({
+  start: z.date(),
+  end: z.date(),
+}).refine(
+  (data) => data.end > data.start,
+  {
+    message: "End date must be after start date",
+    path: ["end"],
+  }
+);
+```
+
+### Aborting Validation
+
+Stop validation on first error:
+
+```typescript
+const schema = z.string()
+  .refine((s) => s.length > 5, {
+    message: "Too short",
+    abort: true,  // Stop here if this fails
+  })
+  .refine((s) => /[A-Z]/.test(s), "Must contain uppercase");
+
+const result = schema.safeParse("abc");
+// Only "Too short" error, second refinement is skipped
+```
+
+### Fatal Flag
+
+Similar to `abort`, but set on the issue:
+
+```typescript
+schema.superRefine((val, ctx) => {
+  if (val === "") {
+    ctx.addIssue({
+      code: "custom",
+      message: "Required",
+      fatal: true,  // Stop validation
+    });
+  }
+});
+```
+
+### Continue Flag
+
+Control whether subsequent refinements run:
+
+```typescript
+// Default: continue after error
+const defaultBehavior = z.string()
+  .superRefine((_, ctx) => {
+    ctx.addIssue({ code: "custom", message: "First" });
+  })
+  .refine(() => false, "Second");
+
+defaultBehavior.safeParse("test");
+// Both errors reported
+
+// Explicit: don't continue
+const stopOnError = z.string()
+  .superRefine((_, ctx) => {
+    ctx.addIssue({ 
+      code: "custom", 
+      message: "First",
+      continue: false  // Stop here
+    });
+  })
+  .refine(() => false, "Second");
+
+stopOnError.safeParse("test");
+// Only "First" error
+```
+
+### Conditional Refinements
+
+Use the `when` option to conditionally run refinements:
+
+```typescript
+const schema = z.strictObject({
+  password: z.string().min(8),
+  confirmPassword: z.string(),
+}).refine(
+  (data) => data.password === data.confirmPassword,
+  {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+    when(payload) {
+      // Only run if no errors on password fields
+      return payload.issues.every(
+        (iss) => iss.path?.[0] !== "confirmPassword" && 
+                 iss.path?.[0] !== "password"
+      );
+    },
+  }
+);
+```
+
+## Type Narrowing
+
+### Type Guard Refinements
+
+Use type guards to narrow the output type:
+
+```typescript
+const schema = z.string().refine(
+  (s): s is "admin" | "user" => s === "admin" || s === "user"
+);
+
+type Input = z.input<typeof schema>;   // string
+type Output = z.output<typeof schema>; // "admin" | "user"
+```
+
+### Non-Type-Guard Refinements
+
+Regular refinements don't narrow types:
+
+```typescript
+const schema = z.string().refine((s) => s.length > 0);
+
+type Input = z.input<typeof schema>;   // string
+type Output = z.output<typeof schema>; // string (not narrowed)
+```
+
+## Common Patterns
+
+### Either/Or Fields
+
+```typescript
+const schema = z.object({
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+}).refine(
+  (data) => data.email || data.phone,
+  "Either email or phone is required"
+);
+```
+
+### Cross-Field Validation
+
+```typescript
+const dateRangeSchema = z.object({
+  startDate: z.date(),
+  endDate: z.date(),
+}).refine(
+  (data) => data.endDate >= data.startDate,
+  {
+    message: "End date must be after or equal to start date",
+    path: ["endDate"],
+  }
+);
+```
+
+### Unique Array Elements
+
+```typescript
+const uniqueArraySchema = z.array(z.string()).superRefine((arr, ctx) => {
+  const seen = new Set<string>();
+  
+  arr.forEach((item, index) => {
+    if (seen.has(item)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Duplicate value: ${item}`,
+        path: [index],
+      });
+    }
+    seen.add(item);
+  });
+});
+```
+
+### Complex Business Rules
+
+```typescript
+const orderSchema = z.object({
+  items: z.array(z.object({
+    price: z.number(),
+    quantity: z.number(),
+  })),
+  discount: z.number().min(0).max(100),
+}).superRefine((order, ctx) => {
+  const subtotal = order.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  
+  if (subtotal < 50 && order.discount > 10) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Discount over 10% requires minimum $50 order",
+      path: ["discount"],
+    });
+  }
+});
+```
+
+### Async Database Validation
+
+```typescript
+const usernameSchema = z.string()
+  .min(3)
+  .refine(
+    async (username) => {
+      const exists = await db.users.findOne({ username });
+      return !exists;
+    },
+    "Username is already taken"
+  );
+
+// Must use async parsing
+await usernameSchema.parseAsync("newuser");
+```
+
+### Multiple Validation Rules
+
+```typescript
+const passwordSchema = z.string()
+  .min(8, "At least 8 characters")
+  .superRefine((password, ctx) => {
+    if (!/[A-Z]/.test(password)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Must contain uppercase letter",
+      });
+    }
+    
+    if (!/[a-z]/.test(password)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Must contain lowercase letter",
+      });
+    }
+    
+    if (!/[0-9]/.test(password)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Must contain number",
+      });
+    }
+  });
+```
+
+## Chaining Refinements
+
+You can chain multiple refinements:
+
+```typescript
+const schema = z.object({
+  length: z.number(),
+  width: z.number(),
+  height: z.number(),
+})
+  .refine(
+    ({ length }) => length > 0,
+    { message: "Length must be positive", path: ["length"] }
+  )
+  .refine(
+    ({ width }) => width > 0,
+    { message: "Width must be positive", path: ["width"] }
+  )
+  .refine(
+    ({ height }) => height > 0,
+    { message: "Height must be positive", path: ["height"] }
+  );
+
+// All errors are collected
+const result = schema.safeParse({ length: -1, width: -1, height: -1 });
+// Three errors reported
+```
+
+## Error Examples
+
+### Basic Refinement Error
+
+```typescript
+const schema = z.object({
+  password: z.string(),
+  confirm: z.string(),
+}).refine(
+  (data) => data.password === data.confirm,
+  "Passwords must match"
+);
+
+const result = schema.safeParse({
+  password: "pass123",
+  confirm: "different"
+});
+
+if (!result.success) {
+  console.log(result.error.issues);
+  // [
+  //   {
+  //     code: "custom",
+  //     message: "Passwords must match",
+  //     path: []
+  //   }
+  // ]
+}
+```
+
+### SuperRefine Multiple Errors
+
+```typescript
+const schema = z.array(z.string()).superRefine((val, ctx) => {
+  if (val.length > 3) {
+    ctx.addIssue({
+      code: "too_big",
+      origin: "array",
+      maximum: 3,
+      inclusive: true,
+      exact: true,
+      message: "Too many items",
+    });
+  }
+
+  if (val.length !== new Set(val).size) {
+    ctx.addIssue({
+      code: "custom",
+      message: "No duplicates allowed",
+    });
+  }
+});
+
+const result = schema.safeParse(["a", "a", "b", "c"]);
+
+if (!result.success) {
+  console.log(result.error.issues);
+  // [
+  //   {
+  //     code: "too_big",
+  //     maximum: 3,
+  //     inclusive: true,
+  //     message: "Too many items",
+  //     path: []
+  //   },
+  //   {
+  //     code: "custom",
+  //     message: "No duplicates allowed",
+  //     path: []
+  //   }
+  // ]
+}
+```
+
+## Best Practices
+
+<Card title="Use refine for simple checks">
+  Use `.refine()` when you just need a true/false validation. It's simpler and more readable.
+</Card>
+
+<Card title="Use superRefine for complex validation">
+  Use `.superRefine()` when you need multiple errors, custom error codes, or fine control over error paths.
+</Card>
+
+<Card title="Provide helpful error messages">
+  Error messages should clearly explain what's wrong and how to fix it.
+</Card>
+
+<Card title="Set appropriate paths">
+  Point errors to the specific field that's invalid using the `path` option.
+</Card>
+
+<Card title="Consider performance">
+  Refinements run after schema validation. Expensive checks (like database calls) should be async and may benefit from caching.
+</Card>
+
+<Card title="Validate early">
+  Use base schema validation for simple checks. Reserve refinements for complex business logic that requires multiple fields.
+</Card>
+
+## Comparison
+
+| Feature | `.refine()` | `.superRefine()` |
+|---------|-------------|------------------|
+| Simplicity | ✅ Simple boolean check | ❌ More verbose |
+| Multiple errors | ❌ One error per refine | ✅ Multiple issues per call |
+| Error control | Limited | ✅ Full control |
+| Type narrowing | ✅ Supports type guards | ❌ No type narrowing |
+| Use case | Simple validation | Complex validation |
+
+## See Also
+
+- [Transform](/api/utilities/transform) - Data transformation
+- [Pipe](/api/utilities/pipe) - Chain schemas
+- [Custom Errors](/guides/error-handling) - Error handling guide
+- [Async Validation](/guides/async-validation) - Async validation patterns

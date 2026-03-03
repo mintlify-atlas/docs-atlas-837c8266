@@ -1,0 +1,274 @@
+---
+title: .catch()
+description: Provide fallback values when validation fails
+---
+
+## Basic Usage
+
+The `.catch()` modifier provides a fallback value when validation fails for any reason.
+
+```typescript
+import { z } from 'zod';
+
+const schema = z.string().catch('fallback');
+
+schema.parse('hello');     // 'hello'
+schema.parse(undefined);   // 'fallback'
+schema.parse(123);         // 'fallback'
+schema.parse(null);        // 'fallback'
+schema.parse({});          // 'fallback'
+```
+
+<Note>
+Unlike `.default()` which only handles `undefined`, `.catch()` handles **all** validation failures.
+</Note>
+
+## Type Inference
+
+The `.catch()` modifier does not change the input/output types:
+
+```typescript
+const schema = z.string().catch('fallback');
+
+type Input = z.input<typeof schema>;   // string
+type Output = z.output<typeof schema>; // string
+```
+
+This is because from a type perspective, you're still working with the base type - the catch is a runtime safety mechanism.
+
+## Dynamic Fallbacks
+
+You can provide a function to generate the fallback value and access error context:
+
+```typescript
+const schema = z.string().catch((ctx) => {
+  console.log('Input was:', ctx.input);
+  console.log('Issues:', ctx.issues);
+  return 'fallback';
+});
+
+schema.parse(123);
+// Logs: Input was: 123
+// Logs: Issues: [{ code: 'invalid_type', ... }]
+// Returns: 'fallback'
+```
+
+### Catch Context
+
+The catch function receives a context object with:
+
+- `ctx.input`: The original input value that failed validation
+- `ctx.issues`: Array of validation issues that occurred
+
+```typescript
+const schema = z.string().catch((ctx) => {
+  // Convert invalid input to string as fallback
+  return String(ctx.input);
+});
+
+schema.parse(123); // '123'
+schema.parse(true); // 'true'
+```
+
+## With Optional Fields
+
+```typescript
+const schema1 = z.string().optional().catch('fallback');
+
+schema1.parse(undefined); // undefined (valid for optional)
+schema1.parse(123);       // 'fallback' (invalid)
+
+// Note: undefined is valid for optional, so catch doesn't trigger
+```
+
+## In Object Schemas
+
+```typescript
+const UserSchema = z.object({
+  name: z.string(),
+  age: z.number().catch(0),
+  role: z.enum(['user', 'admin']).catch('user'),
+});
+
+UserSchema.parse({
+  name: 'John',
+  age: 'invalid',  // Will use fallback: 0
+  role: 'invalid', // Will use fallback: 'user'
+});
+// { name: 'John', age: 0, role: 'user' }
+```
+
+<Warning>
+When using `.catch()` in objects, validation errors in fields without catch will still cause the entire parse to fail.
+</Warning>
+
+```typescript
+const schema = z.object({
+  name: z.string(),           // No catch
+  age: z.number().catch(0),   // Has catch
+});
+
+schema.parse({
+  name: 123,      // Throws error (no catch on this field)
+  age: 'invalid', // Would fallback to 0 if name was valid
+});
+```
+
+## Chaining with Transforms
+
+```typescript
+const schema = z.string()
+  .transform(s => s.toUpperCase())
+  .catch('FALLBACK');
+
+schema.parse('hello');  // 'HELLO'
+schema.parse(123);      // 'FALLBACK'
+```
+
+The catch applies after the transform, so invalid inputs that can't be transformed will use the fallback.
+
+## Nested Catches
+
+```typescript
+const schema = z.object({
+  inner: z.string().catch('inner-fallback'),
+}).catch({
+  inner: 'outer-fallback',
+});
+
+schema.parse({ inner: 123 });     // { inner: 'inner-fallback' }
+schema.parse({ inner: 'valid' }); // { inner: 'valid' }
+schema.parse(null);               // { inner: 'outer-fallback' }
+```
+
+## Chained Catches
+
+```typescript
+const schema = z.string()
+  .catch('inner')
+  .catch('outer');
+
+schema.parse(123); // 'inner' (first catch handles it)
+```
+
+When catches are chained, the innermost catch handles the error first.
+
+## With Enums
+
+```typescript
+enum Fruits {
+  Apple = 'apple',
+  Orange = 'orange',
+}
+
+const schema = z.object({
+  fruit: z.nativeEnum(Fruits).catch(Fruits.Apple),
+});
+
+schema.parse({});              // { fruit: 'apple' }
+schema.parse({ fruit: 15 });   // { fruit: 'apple' }
+schema.parse({ fruit: 'orange' }); // { fruit: 'orange' }
+```
+
+## Complex Example
+
+```typescript
+const schema = z
+  .string()
+  .catch('step1')
+  .transform(val => `${val}!`)
+  .transform(val => val.toUpperCase())
+  .catch('step2')
+  .unwrap()
+  .optional()
+  .catch('final');
+
+schema.parse('hello'); // 'HELLO!'
+schema.parse(123);     // 'STEP1!' (caught at first catch, then transformed)
+```
+
+## Direction-Aware Behavior
+
+Catches only apply during parsing (forward direction), not during encoding:
+
+```typescript
+const schema = z.string().catch('fallback');
+
+// Parsing (forward)
+schema.parse(123); // 'fallback'
+
+// Encoding (reverse)
+z.safeEncode(schema, 123); // returns error, no fallback
+```
+
+## Unwrapping
+
+You can remove the catch wrapper:
+
+```typescript
+const withCatch = z.string().catch('fallback');
+const withoutCatch = withCatch.unwrap(); // ZodString
+
+// Legacy method (deprecated)
+const withoutCatch2 = withCatch.removeCatch(); // same as unwrap()
+```
+
+## Catch vs Default
+
+| Feature | `.catch()` | `.default()` |
+|---------|-----------|-------------|
+| Triggers on | Any validation failure | Only `undefined` |
+| Use case | Error recovery, fault tolerance | Optional configuration |
+| Input type | Unchanged | Adds `undefined` |
+| Output type | Unchanged | Removes `undefined` |
+
+## Use Cases
+
+### Fault-Tolerant Parsing
+
+```typescript
+// Parse user-generated data with fallbacks
+const UserSettings = z.object({
+  theme: z.enum(['light', 'dark']).catch('light'),
+  fontSize: z.number().min(10).max(24).catch(14),
+  notifications: z.boolean().catch(true),
+});
+
+// Even with corrupted data, you get valid output
+const settings = UserSettings.parse({
+  theme: 'invalid',
+  fontSize: 'not-a-number',
+  notifications: 'yes',
+});
+// { theme: 'light', fontSize: 14, notifications: true }
+```
+
+### API Response Sanitization
+
+```typescript
+// Handle inconsistent API responses
+const ApiResponse = z.object({
+  items: z.array(z.object({
+    id: z.string(),
+    count: z.number().catch(0),
+  })).catch([]),
+});
+
+// Even if API returns garbage, you get valid data
+const data = ApiResponse.parse({ items: 'broken' });
+// { items: [] }
+```
+
+### Gradual Migration
+
+```typescript
+// When migrating to stricter types, use catch for compatibility
+const LegacyData = z.object({
+  // Old API might send strings, new code expects numbers
+  userId: z.number().catch(-1),
+});
+```
+
+<Warning>
+While `.catch()` is useful for fault tolerance, overuse can hide data quality issues. Use it thoughtfully and log when fallbacks are triggered.
+</Warning>

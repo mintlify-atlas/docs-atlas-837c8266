@@ -1,0 +1,305 @@
+---
+title: 'z.coerce.*'
+description: 'Type coercion utilities for automatic type conversion'
+---
+
+## Overview
+
+The `z.coerce` namespace provides utilities for automatic type conversion. Coercion schemas attempt to convert input values to the target type before validation, making it easier to work with form data, query parameters, and other loosely-typed inputs.
+
+## Available Coercions
+
+### z.coerce.string()
+
+Converts any input to a string using JavaScript's `String()` function.
+
+<ParamField path="params" type="string | ZodStringParams" optional>
+  Optional error message or configuration object
+</ParamField>
+
+**Returns:** `ZodCoercedString`
+
+```typescript
+const schema = z.coerce.string();
+
+schema.parse("hello");        // "hello"
+schema.parse(42);             // "42"
+schema.parse(true);           // "true"
+schema.parse(null);           // "null"
+schema.parse(undefined);      // "undefined"
+schema.parse([1, 2, 3]);      // "1,2,3"
+schema.parse({ foo: "bar" }); // "[object Object]"
+```
+
+### z.coerce.number()
+
+Converts input to a number using JavaScript's `Number()` function.
+
+<ParamField path="params" type="string | ZodNumberParams" optional>
+  Optional error message or configuration object
+</ParamField>
+
+**Returns:** `ZodCoercedNumber`
+
+```typescript
+const schema = z.coerce.number();
+
+schema.parse("42");      // 42
+schema.parse("3.14");    // 3.14
+schema.parse(true);      // 1
+schema.parse(false);     // 0
+schema.parse("");        // 0
+schema.parse(null);      // 0
+
+// Throws validation error
+schema.parse("not a number"); // ZodError
+schema.parse(NaN);            // ZodError (NaN not allowed in v4)
+schema.parse(undefined);      // ZodError
+```
+
+### z.coerce.boolean()
+
+Converts input to a boolean using JavaScript's `Boolean()` function.
+
+<ParamField path="params" type="string | ZodBooleanParams" optional>
+  Optional error message or configuration object
+</ParamField>
+
+**Returns:** `ZodCoercedBoolean`
+
+```typescript
+const schema = z.coerce.boolean();
+
+// Truthy values
+schema.parse("hello");   // true
+schema.parse(1);         // true
+schema.parse([]);        // true
+schema.parse({});        // true
+
+// Falsy values
+schema.parse("");        // false
+schema.parse(0);         // false
+schema.parse(null);      // false
+schema.parse(undefined); // false
+schema.parse(NaN);       // false
+```
+
+<Note>
+  Note that `z.coerce.boolean()` uses JavaScript's truthiness rules. The string `"false"` coerces to `true` because it's a non-empty string. For parsing string booleans, use `z.stringbool()` instead.
+</Note>
+
+### z.coerce.bigint()
+
+Converts input to a BigInt using JavaScript's `BigInt()` function.
+
+<ParamField path="params" type="string | ZodBigIntParams" optional>
+  Optional error message or configuration object
+</ParamField>
+
+**Returns:** `ZodCoercedBigInt`
+
+```typescript
+const schema = z.coerce.bigint();
+
+schema.parse("42");      // 42n
+schema.parse(42);        // 42n
+schema.parse(true);      // 1n
+schema.parse(false);     // 0n
+schema.parse("");        // 0n
+
+// Throws (not ZodError)
+schema.parse("3.14");    // SyntaxError
+schema.parse(null);      // TypeError
+schema.parse(undefined); // TypeError
+```
+
+<Warning>
+  Invalid BigInt conversions throw native JavaScript errors, not ZodErrors. This is a limitation of the BigInt constructor.
+</Warning>
+
+### z.coerce.date()
+
+Converts input to a Date object using JavaScript's `Date()` constructor.
+
+<ParamField path="params" type="string | ZodDateParams" optional>
+  Optional error message or configuration object
+</ParamField>
+
+**Returns:** `ZodCoercedDate`
+
+```typescript
+const schema = z.coerce.date();
+
+schema.parse("2024-01-01");           // Date object
+schema.parse(1704067200000);          // Date from timestamp
+schema.parse(new Date());             // Passes through
+schema.parse(true);                   // Date(1)
+schema.parse(false);                  // Date(0)
+
+// Throws validation error for invalid dates
+schema.parse("");                     // ZodError
+schema.parse("not a date");           // ZodError
+schema.parse(NaN);                    // ZodError
+schema.parse(Infinity);               // ZodError
+schema.parse(undefined);              // ZodError
+```
+
+## Common Use Cases
+
+### Form Data
+
+Coercion is particularly useful when parsing form data, where all values arrive as strings:
+
+```typescript
+const formSchema = z.object({
+  age: z.coerce.number().int().positive(),
+  terms: z.coerce.boolean(),
+  email: z.coerce.string().email(),
+});
+
+// All form inputs are strings
+const formData = {
+  age: "25",
+  terms: "on",
+  email: "user@example.com"
+};
+
+const result = formSchema.parse(formData);
+// { age: 25, terms: true, email: "user@example.com" }
+```
+
+### Query Parameters
+
+```typescript
+const querySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  search: z.coerce.string().optional(),
+});
+
+const params = new URLSearchParams("page=2&limit=20&search=hello");
+const query = querySchema.parse(Object.fromEntries(params));
+// { page: 2, limit: 20, search: "hello" }
+```
+
+### CSV Parsing
+
+```typescript
+const csvRowSchema = z.object({
+  id: z.coerce.number().int(),
+  name: z.coerce.string(),
+  price: z.coerce.number(),
+  inStock: z.coerce.boolean(),
+  createdAt: z.coerce.date(),
+});
+
+const csvRow = {
+  id: "1",
+  name: "Product",
+  price: "19.99",
+  inStock: "true",
+  createdAt: "2024-01-01"
+};
+
+const product = csvRowSchema.parse(csvRow);
+```
+
+## Chaining with Validators
+
+Coercion happens before validation, so you can chain validation methods:
+
+```typescript
+const ageSchema = z.coerce.number()
+  .int("Age must be an integer")
+  .min(0, "Age cannot be negative")
+  .max(120, "Age seems unrealistic");
+
+ageSchema.parse("25");  // 25
+ageSchema.parse("25.5"); // Error: Age must be an integer
+ageSchema.parse("-5");   // Error: Age cannot be negative
+```
+
+## Type Inference
+
+Coerced schemas maintain proper TypeScript types:
+
+```typescript
+const schema = z.coerce.number();
+
+type Input = z.input<typeof schema>;   // unknown (accepts any type)
+type Output = z.output<typeof schema>; // number
+```
+
+You can override the input type if needed:
+
+```typescript
+const schema = z.coerce.string<string | number>();
+
+type Input = z.input<typeof schema>;   // string | number
+type Output = z.output<typeof schema>; // string
+```
+
+## Validation Errors
+
+Coercion failures result in validation errors:
+
+```typescript
+const schema = z.coerce.number();
+
+const result = schema.safeParse("not a number");
+
+if (!result.success) {
+  console.log(result.error.issues);
+  // [
+  //   {
+  //     code: "invalid_type",
+  //     expected: "number",
+  //     received: "nan",
+  //     path: [],
+  //     message: "Invalid input: expected number, received nan"
+  //   }
+  // ]
+}
+```
+
+## Comparison with Transform
+
+Coercion is different from `.transform()`:
+
+- **Coercion** happens before validation and is lossy (information may be lost)
+- **Transform** happens after validation and should be lossless
+
+```typescript
+// Coercion: converts then validates
+const coerced = z.coerce.number().int();
+coerced.parse("3.14"); // 3 (rounded by Number constructor)
+
+// Transform: validates then converts
+const transformed = z.string().transform(Number);
+transformed.parse("3.14"); // 3.14 (precise conversion)
+```
+
+## Best Practices
+
+<Card title="Use coercion for external inputs">
+  Coercion is ideal for data from external sources like forms, URLs, and APIs where types aren't guaranteed.
+</Card>
+
+<Card title="Validate after coercion">
+  Always add validation after coercion to ensure the coerced value meets your requirements.
+</Card>
+
+<Card title="Be aware of edge cases">
+  Test edge cases like empty strings, null, undefined, and special values (NaN, Infinity) to understand coercion behavior.
+</Card>
+
+<Card title="Consider alternatives">
+  For strict type checking without coercion, use regular schemas. For custom conversions, use `.transform()` or `.pipe()`.
+</Card>
+
+## See Also
+
+- [Transform](/api/utilities/transform) - Custom data transformations
+- [Pipe](/api/utilities/pipe) - Chain schemas together
+- [String](/api/primitives/string) - String validation
+- [Number](/api/primitives/number) - Number validation

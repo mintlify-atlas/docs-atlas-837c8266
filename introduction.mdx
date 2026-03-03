@@ -1,0 +1,105 @@
+---
+title: Introduction
+description: TypeScript-first schema validation with static type inference
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Zod Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Zod Hero Dark"
+/>
+
+## What is Zod?
+
+Zod is a TypeScript-first validation library that lets you define schemas and parse data with them. You'll get back strongly typed, validated results.
+
+```typescript
+import * as z from "zod";
+
+const User = z.object({
+  name: z.string(),
+});
+
+// some untrusted data...
+const input = {
+  /* stuff */
+};
+
+// the parsed result is validated and type safe!
+const data = User.parse(input);
+
+// so you can use it with confidence :)
+console.log(data.name);
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Zero Dependencies" icon="cube">
+    No external dependencies. Works in Node.js and all modern browsers.
+  </Card>
+  <Card title="Tiny Bundle Size" icon="feather">
+    Core bundle is just 2kb minified and gzipped.
+  </Card>
+  <Card title="TypeScript-First" icon="code">
+    Define a schema once and Zod automatically infers the static TypeScript type.
+  </Card>
+  <Card title="Immutable API" icon="lock">
+    Methods like `.check()` return a new instance, keeping your schemas immutable.
+  </Card>
+  <Card title="Works with Plain JS" icon="js">
+    You don't need to use TypeScript. Zod works with plain JavaScript too.
+  </Card>
+  <Card title="Built-in JSON Schema" icon="file-code">
+    Convert your Zod schemas to JSON Schema for interoperability.
+  </Card>
+</CardGroup>
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Install Zod using npm, yarn, pnpm, or bun
+  </Card>
+  <Card
+    title="Quick Start"
+    icon="bolt"
+    href="/quickstart"
+  >
+    Learn the basics with a hands-on tutorial
+  </Card>
+  <Card
+    title="Primitives"
+    icon="shapes"
+    href="/primitives"
+  >
+    Explore string, number, boolean, and other basic types
+  </Card>
+  <Card
+    title="Objects"
+    icon="cubes"
+    href="/objects"
+  >
+    Define complex object schemas with nested structures
+  </Card>
+</CardGroup>
+
+## Why Zod?
+
+With Zod, you declare a validator once and automatically get:
+
+- **Static type inference** - No duplicate type declarations
+- **Runtime validation** - Catch data errors at runtime
+- **Detailed error messages** - Know exactly what went wrong
+- **Developer-friendly API** - Concise, chainable interface
+
+Zod follows the [parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) philosophy, giving you confidence in your data from input to output.

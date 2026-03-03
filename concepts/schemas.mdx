@@ -1,0 +1,278 @@
+---
+title: Schemas
+description: Understanding Zod schemas - the foundation of runtime validation and type inference
+---
+
+## What is a Schema?
+
+In Zod, a **schema** is an object that represents a data structure and its validation rules. Schemas serve two purposes:
+
+1. **Runtime validation** - Check if data matches expected structure
+2. **Type inference** - Automatically generate TypeScript types
+
+Every schema is an instance of `ZodType` and has methods for parsing, validation, and transformation.
+
+## Creating Basic Schemas
+
+Zod provides factory functions for all primitive types:
+
+```typescript
+import { z } from 'zod';
+
+// Primitives
+const stringSchema = z.string();
+const numberSchema = z.number();
+const booleanSchema = z.boolean();
+const bigintSchema = z.bigint();
+const dateSchema = z.date();
+
+// Special types
+const undefinedSchema = z.undefined();
+const nullSchema = z.null();
+const anySchema = z.any();
+const unknownSchema = z.unknown();
+const neverSchema = z.never();
+```
+
+## String Schemas
+
+String schemas support validation and transformation methods:
+
+```typescript
+// Length validations
+const minFive = z.string().min(5);
+const maxTen = z.string().max(10);
+const exactlyFive = z.string().length(5);
+const nonempty = z.string().min(1);
+
+// Pattern validations
+const email = z.string().email();
+const url = z.string().url();
+const uuid = z.string().uuid();
+const regex = z.string().regex(/^[A-Z]+$/);
+
+// Content validations
+const includesTest = z.string().includes('test');
+const startsWithHello = z.string().startsWith('hello');
+const endsWithWorld = z.string().endsWith('world');
+
+// Transformations
+const trimmed = z.string().trim();
+const lowercase = z.string().toLowerCase();
+const uppercase = z.string().toUpperCase();
+```
+
+<Note>
+From the source code at `packages/zod/src/v4/classic/schemas.ts:269-318`, string schemas have properties like `format`, `minLength`, and `maxLength` that can be inspected.
+</Note>
+
+## Number Schemas
+
+Number validation with numeric constraints:
+
+```typescript
+// Comparison validations
+const positive = z.number().positive();       // > 0
+const nonnegative = z.number().nonnegative(); // >= 0
+const negative = z.number().negative();       // < 0
+const nonpositive = z.number().nonpositive(); // <= 0
+
+// Range validations
+const gtTen = z.number().gt(10);  // Greater than
+const gteZero = z.number().gte(0); // Greater than or equal
+const ltHundred = z.number().lt(100); // Less than
+const lteMax = z.number().lte(1000); // Less than or equal
+
+// Aliases
+const min = z.number().min(0);  // Same as gte
+const max = z.number().max(100); // Same as lte
+
+// Special validations
+const integer = z.number().int();
+const multipleOfFive = z.number().multipleOf(5);
+```
+
+Zod v4 does NOT accept infinite values by default - all numbers must be finite.
+
+## Object Schemas
+
+Define complex object structures:
+
+```typescript
+const User = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number().optional(),
+  role: z.enum(['admin', 'user']),
+});
+
+// Access shape
+const nameSchema = User.shape.name; // ZodString
+
+// Modify objects
+const PartialUser = User.partial();  // All fields optional
+const RequiredUser = User.required(); // All fields required
+const PickedUser = User.pick({ name: true, email: true });
+const OmittedUser = User.omit({ id: true });
+```
+
+## Array Schemas
+
+Validate arrays with element constraints:
+
+```typescript
+const strings = z.array(z.string());
+const numbers = z.number().array(); // Alternative syntax
+
+// Length constraints
+const atLeastOne = z.array(z.string()).min(1);
+const nonempty = z.array(z.string()).nonempty();
+const maxTen = z.array(z.string()).max(10);
+const exactlyFive = z.array(z.string()).length(5);
+
+// Unwrap element type
+const elementSchema = strings.unwrap(); // Returns z.string()
+```
+
+## Union and Intersection
+
+Combine multiple schemas:
+
+```typescript
+// Union - one of several types
+const StringOrNumber = z.union([z.string(), z.number()]);
+const alt = z.string().or(z.number()); // Alternative syntax
+
+// Intersection - all types simultaneously
+const Combined = z.intersection(
+  z.object({ id: z.number() }),
+  z.object({ name: z.string() })
+);
+const alt2 = z.object({ id: z.number() }).and(z.object({ name: z.string() }));
+```
+
+## Enum Schemas
+
+```typescript
+// Native enum
+const Fruits = z.enum(['apple', 'banana', 'orange']);
+type Fruits = z.infer<typeof Fruits>; // 'apple' | 'banana' | 'orange'
+
+// From object keys
+const User = z.object({
+  name: z.string(),
+  email: z.string(),
+});
+const UserKeys = z.keyof(User); // 'name' | 'email'
+```
+
+## Optional and Nullable
+
+```typescript
+const optionalString = z.string().optional(); // string | undefined
+const nullableString = z.string().nullable(); // string | null
+const nullishString = z.string().nullish();   // string | null | undefined
+
+// In objects
+const Schema = z.object({
+  required: z.string(),
+  optional: z.string().optional(),
+  nullable: z.string().nullable(),
+});
+```
+
+## Schema Metadata
+
+Add descriptions and custom metadata:
+
+```typescript
+const schema = z.string().describe('User email address');
+console.log(schema.description); // 'User email address'
+
+// Custom metadata (stored in globalRegistry)
+const tagged = schema.meta({ tag: 'email', version: 1 });
+const metadata = tagged.meta(); // { tag: 'email', version: 1, description: '...' }
+```
+
+## Common Patterns
+
+<Steps>
+
+### Form Validation
+
+```typescript
+const LoginForm = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  rememberMe: z.boolean().default(false),
+});
+```
+
+### API Response
+
+```typescript
+const ApiResponse = z.object({
+  success: z.boolean(),
+  data: z.unknown(),
+  error: z.string().optional(),
+  timestamp: z.date(),
+});
+```
+
+### Configuration
+
+```typescript
+const Config = z.object({
+  port: z.number().int().positive().default(3000),
+  host: z.string().default('localhost'),
+  env: z.enum(['development', 'production', 'test']),
+  database: z.object({
+    url: z.string().url(),
+    pool: z.number().int().min(1).max(100).default(10),
+  }),
+});
+```
+
+</Steps>
+
+## Schema Chaining
+
+All schema methods return a new schema instance, allowing method chaining:
+
+```typescript
+const schema = z.string()
+  .trim()              // Remove whitespace
+  .toLowerCase()       // Convert to lowercase  
+  .min(3)             // Min length 3
+  .max(50)            // Max length 50
+  .email();           // Must be valid email
+```
+
+<Warning>
+Each method call creates a new schema instance. The original schema remains unchanged.
+</Warning>
+
+## Unknown Keys in Objects
+
+Control how objects handle extra properties:
+
+```typescript
+const strict = z.object({ name: z.string() }).strict();
+// Throws on unknown keys
+
+const strip = z.object({ name: z.string() }).strip();
+// Silently removes unknown keys (default behavior)
+
+const passthrough = z.object({ name: z.string() }).passthrough();
+// Allows unknown keys to pass through
+
+const catchall = z.object({ name: z.string() }).catchall(z.number());
+// Unknown keys must be numbers
+```
+
+## Next Steps
+
+- Learn about [Parsing](/concepts/parsing) to validate data with schemas
+- Explore [Type Inference](/concepts/type-inference) to extract TypeScript types
+- Master [Refinements](/concepts/refinements) for custom validation logic

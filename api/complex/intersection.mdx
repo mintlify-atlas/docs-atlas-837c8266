@@ -1,0 +1,345 @@
+---
+title: 'z.intersection()'
+description: 'Combine multiple schemas with AND logic'
+---
+
+## Basic Usage
+
+Create a schema that requires the input to satisfy all provided schemas.
+
+```typescript
+import { z } from 'zod';
+
+const HasId = z.object({ id: z.string() });
+const HasName = z.object({ name: z.string() });
+
+const User = z.intersection(HasId, HasName);
+
+User.parse({ id: '123', name: 'Alice' }); // ✓ Valid
+User.parse({ id: '123' });                // ✗ Invalid - missing name
+User.parse({ name: 'Alice' });            // ✗ Invalid - missing id
+
+type User = z.infer<typeof User>;
+// { id: string } & { name: string }
+// Simplifies to: { id: string; name: string }
+```
+
+## Signature
+
+```typescript
+function intersection<T extends SomeType, U extends SomeType>(
+  left: T,
+  right: U
+): ZodIntersection<T, U>
+```
+
+<ParamField path="left" type="ZodType" required>
+  The first schema to intersect.
+</ParamField>
+
+<ParamField path="right" type="ZodType" required>
+  The second schema to intersect.
+</ParamField>
+
+## Convenience Method
+
+Use the `.and()` method as shorthand:
+
+```typescript
+const HasId = z.object({ id: z.string() });
+const HasName = z.object({ name: z.string() });
+
+const User = HasId.and(HasName);
+// Equivalent to: z.intersection(HasId, HasName)
+
+type User = z.infer<typeof User>;
+// { id: string; name: string }
+```
+
+## Object Intersections
+
+Merge object shapes:
+
+```typescript
+const BaseEntity = z.object({
+  id: z.string(),
+  createdAt: z.date(),
+});
+
+const NamedEntity = z.object({
+  name: z.string(),
+  description: z.string(),
+});
+
+const Product = z.intersection(BaseEntity, NamedEntity);
+
+type Product = z.infer<typeof Product>;
+// {
+//   id: string;
+//   createdAt: Date;
+//   name: string;
+//   description: string;
+// }
+```
+
+<Note>
+For objects, prefer `.extend()` over `.intersection()` for better type inference and performance.
+</Note>
+
+```typescript
+// Recommended approach
+const Product = BaseEntity.extend({
+  name: z.string(),
+  description: z.string(),
+});
+
+// Also works: spread the shape
+const Product = BaseEntity.extend(NamedEntity.shape);
+```
+
+## Type Conflicts
+
+Intersecting incompatible types creates impossible schemas:
+
+```typescript
+const Impossible = z.intersection(
+  z.string(),
+  z.number()
+);
+
+type Impossible = z.infer<typeof Impossible>;
+// string & number (never)
+
+// This will always fail at runtime
+Impossible.parse('hello'); // ✗ Invalid - not a number
+Impossible.parse(42);      // ✗ Invalid - not a string
+```
+
+### Overlapping Object Properties
+
+When objects have the same property:
+
+```typescript
+const A = z.object({ value: z.string() });
+const B = z.object({ value: z.number() });
+
+const Conflict = z.intersection(A, B);
+
+type Conflict = z.infer<typeof Conflict>;
+// { value: string } & { value: number }
+// Property 'value' is string & number (never)
+
+// This will always fail
+Conflict.parse({ value: 'test' }); // ✗ Invalid
+Conflict.parse({ value: 42 });     // ✗ Invalid
+```
+
+To handle this, use union types:
+
+```typescript
+const A = z.object({ value: z.string() });
+const B = z.object({ value: z.number() });
+
+const Compatible = z.object({
+  value: z.union([z.string(), z.number()]),
+});
+
+type Compatible = z.infer<typeof Compatible>;
+// { value: string | number }
+```
+
+## Array Intersections
+
+Intersecting arrays merges element constraints:
+
+```typescript
+const MinTwo = z.array(z.any()).min(2);
+const MaxFive = z.array(z.any()).max(5);
+
+const Bounded = z.intersection(MinTwo, MaxFive);
+
+Bounded.parse([1, 2]);           // ✓ Valid
+Bounded.parse([1, 2, 3, 4, 5]);  // ✓ Valid
+Bounded.parse([1]);              // ✗ Invalid - too short
+Bounded.parse([1, 2, 3, 4, 5, 6]); // ✗ Invalid - too long
+```
+
+Incompatible element types create invalid schemas:
+
+```typescript
+const StringArray = z.array(z.string());
+const NumberArray = z.array(z.number());
+
+const Invalid = z.intersection(StringArray, NumberArray);
+// Elements must be both string AND number (impossible)
+```
+
+## Primitive Intersections
+
+Intersecting primitives with refinements:
+
+```typescript
+const MinLength = z.string().min(5);
+const MaxLength = z.string().max(10);
+
+const BoundedString = z.intersection(MinLength, MaxLength);
+
+BoundedString.parse('hello');      // ✓ Valid (5 chars)
+BoundedString.parse('helloworld'); // ✓ Valid (10 chars)
+BoundedString.parse('hi');         // ✗ Invalid - too short
+BoundedString.parse('verylongstring'); // ✗ Invalid - too long
+
+type BoundedString = z.infer<typeof BoundedString>;
+// string
+```
+
+## Type Inference
+
+```typescript
+const schema = z.intersection(
+  z.object({ id: z.string() }),
+  z.object({ name: z.string() })
+);
+
+type Output = z.infer<typeof schema>;
+// { id: string } & { name: string }
+// Simplifies to: { id: string; name: string }
+
+type Input = z.input<typeof schema>;
+// Same as output for intersections without transformations
+```
+
+## Multiple Intersections
+
+Chain multiple `.and()` calls:
+
+```typescript
+const A = z.object({ a: z.string() });
+const B = z.object({ b: z.number() });
+const C = z.object({ c: z.boolean() });
+
+const ABC = A.and(B).and(C);
+// Equivalent to: z.intersection(z.intersection(A, B), C)
+
+type ABC = z.infer<typeof ABC>;
+// { a: string; b: number; c: boolean }
+```
+
+## Common Patterns
+
+### Mixins
+
+```typescript
+const Timestamped = z.object({
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+const Versioned = z.object({
+  version: z.number(),
+});
+
+const Entity = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
+const FullEntity = Entity.and(Timestamped).and(Versioned);
+
+type FullEntity = z.infer<typeof FullEntity>;
+// {
+//   id: string;
+//   name: string;
+//   createdAt: Date;
+//   updatedAt: Date;
+//   version: number;
+// }
+```
+
+### Combining Constraints
+
+```typescript
+const EmailString = z.string().email();
+const LongString = z.string().min(10);
+
+const LongEmail = EmailString.and(LongString);
+
+LongEmail.parse('short@x.com');      // ✗ Invalid - too short
+LongEmail.parse('valid@example.com'); // ✓ Valid
+
+type LongEmail = z.infer<typeof LongEmail>;
+// string
+```
+
+### Partial Updates
+
+```typescript
+const FullUser = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number(),
+});
+
+const UserUpdate = FullUser.partial().and(
+  z.object({ id: z.string() }) // id is required
+);
+
+type UserUpdate = z.infer<typeof UserUpdate>;
+// {
+//   id: string;
+//   name?: string;
+//   email?: string;
+//   age?: number;
+// }
+
+UserUpdate.parse({ id: '123' }); // ✓ Valid
+UserUpdate.parse({ id: '123', name: 'Alice' }); // ✓ Valid
+UserUpdate.parse({ name: 'Alice' }); // ✗ Invalid - missing id
+```
+
+## Intersection vs Union
+
+| Feature | Intersection (AND) | Union (OR) |
+|---------|-------------------|------------|
+| **Logic** | Must satisfy all schemas | Must satisfy at least one |
+| **Operator** | `.and()` | `.or()` |
+| **Type** | `A & B` | `A \| B` |
+| **Objects** | Merges properties | Alternative shapes |
+| **Use Case** | Combine requirements | Alternative types |
+
+```typescript
+// Intersection: Must have both properties
+const both = z.object({ a: z.string() })
+  .and(z.object({ b: z.number() }));
+
+type Both = z.infer<typeof both>;
+// { a: string; b: number }
+
+// Union: Can have either shape
+const either = z.object({ a: z.string() })
+  .or(z.object({ b: z.number() }));
+
+type Either = z.infer<typeof either>;
+// { a: string } | { b: number }
+```
+
+## Limitations
+
+<Warning>
+Intersections have limitations with:
+- Primitive type conflicts (e.g., `string & number`)
+- Incompatible array element types
+- Overlapping object properties with different types
+</Warning>
+
+For object merging, prefer:
+1. `.extend()` for adding properties
+2. `.merge()` for combining objects (deprecated, use `.extend(other.shape)`)
+3. Manual object construction for complex cases
+
+## Related
+
+- [z.union()](/api/complex/union) - For OR logic (alternative types)
+- [z.object()](/api/complex/object) - For object schemas with `.extend()`
+- [z.discriminatedUnion()](/api/complex/discriminated-union) - For tagged unions
