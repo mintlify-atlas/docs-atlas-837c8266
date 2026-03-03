@@ -1,0 +1,184 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Zod",
+  "projectDescription": "TypeScript-first schema validation with static type inference",
+  "theme": "aspen",
+  "primaryColor": "#3a6aff",
+  "lightColor": "#45a9ff",
+  "darkColor": "#3a6aff",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/schemas",
+              "concepts/parsing",
+              "concepts/type-inference",
+              "concepts/transformations",
+              "concepts/refinements"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/error-handling",
+              "guides/error-customization",
+              "guides/async-validation",
+              "guides/json-schema",
+              "guides/codecs"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/library-authors",
+              "advanced/performance",
+              "advanced/ecosystem"
+            ]
+          },
+          {
+            "group": "Migration",
+            "pages": [
+              "migration/v4-changelog",
+              "migration/versioning"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Primitives",
+            "pages": [
+              "api/primitives/string",
+              "api/primitives/number",
+              "api/primitives/boolean",
+              "api/primitives/bigint",
+              "api/primitives/date"
+            ]
+          },
+          {
+            "group": "Complex Types",
+            "pages": [
+              "api/complex/object",
+              "api/complex/array",
+              "api/complex/tuple",
+              "api/complex/union",
+              "api/complex/intersection",
+              "api/complex/record",
+              "api/complex/map",
+              "api/complex/set"
+            ]
+          },
+          {
+            "group": "String Formats",
+            "pages": [
+              "api/formats/email",
+              "api/formats/url",
+              "api/formats/uuid",
+              "api/formats/cuid",
+              "api/formats/nanoid",
+              "api/formats/datetime"
+            ]
+          },
+          {
+            "group": "Modifiers",
+            "pages": [
+              "api/modifiers/optional",
+              "api/modifiers/nullable",
+              "api/modifiers/default",
+              "api/modifiers/catch",
+              "api/modifiers/brand"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utilities/coerce",
+              "api/utilities/pipe",
+              "api/utilities/transform",
+              "api/utilities/refine"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Zero dependencies",
+    "TypeScript-first with static type inference",
+    "Tiny bundle size (2kb core gzipped)",
+    "Immutable API design",
+    "Built-in JSON Schema conversion",
+    "Comprehensive validation library",
+    "Works in Node.js and browsers",
+    "Rich ecosystem support"
+  ],
+  "publicApiSurface": [
+    "z.string()",
+    "z.number()",
+    "z.boolean()",
+    "z.bigint()",
+    "z.date()",
+    "z.object()",
+    "z.array()",
+    "z.tuple()",
+    "z.union()",
+    "z.intersection()",
+    "z.record()",
+    "z.map()",
+    "z.set()",
+    "z.literal()",
+    "z.enum()",
+    "z.nativeEnum()",
+    "z.optional()",
+    "z.nullable()",
+    "z.nullish()",
+    "z.any()",
+    "z.unknown()",
+    "z.never()",
+    "z.void()",
+    "z.undefined()",
+    "z.null()",
+    "z.nan()",
+    "z.coerce.*",
+    "z.email()",
+    "z.url()",
+    "z.uuid()",
+    "z.cuid()",
+    "z.cuid2()",
+    "z.ulid()",
+    "z.nanoid()",
+    "z.iso.*",
+    "schema.parse()",
+    "schema.safeParse()",
+    "schema.parseAsync()",
+    "schema.safeParseAsync()",
+    "schema.refine()",
+    "schema.superRefine()",
+    "schema.transform()",
+    "schema.pipe()",
+    "schema.default()",
+    "schema.catch()",
+    "schema.optional()",
+    "schema.nullable()",
+    "schema.brand()",
+    "z.infer<>",
+    "z.input<>",
+    "z.output<>",
+    "toJSONSchema()",
+    "fromJSONSchema()"
+  ]
+}
