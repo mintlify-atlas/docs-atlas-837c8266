@@ -63,7 +63,7 @@ When parsing fails, Zod throws a detailed error:
 try {
   Player.parse({ username: 42, xp: "100" });
 } catch (err) {
-  if (err instanceof z.core.$ZodRealError) {
+  if (err instanceof z.ZodError) {
     console.log(err.issues);
     /* [
       {
@@ -230,16 +230,16 @@ if (result.success) {
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Primitives" icon="shapes" href="/primitives">
+  <Card title="Primitives" icon="shapes" href="/api/primitives/string">
     Explore all primitive types: strings, numbers, dates, and more
   </Card>
-  <Card title="Objects" icon="cubes" href="/objects">
+  <Card title="Objects" icon="cubes" href="/api/complex/object">
     Learn about object schemas, nesting, and composition
   </Card>
-  <Card title="Arrays & Tuples" icon="list" href="/arrays">
+  <Card title="Arrays & Tuples" icon="list" href="/api/complex/array">
     Work with arrays, tuples, and collections
   </Card>
-  <Card title="Advanced Types" icon="wand-magic-sparkles" href="/unions">
+  <Card title="Advanced Types" icon="wand-magic-sparkles" href="/api/complex/union">
     Master unions, intersections, and discriminated unions
   </Card>
 </CardGroup>
